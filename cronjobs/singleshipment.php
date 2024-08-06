@@ -34,7 +34,7 @@ if(empty($app->Secure))$app->Secure = new secure_t();
 if(empty($app->User))$app->User = new User($app);
 
 
-$app->DB->DELETE("DELETE FROM singleshipment_order s WHERE s.status='abgeschlossen'");
+$app->DB->DELETE("DELETE FROM singleshipment_order WHERE status='abgeschlossen'");
 
 $orders = $app->DB->SelectArr("SELECT a.id,s.id as sid FROM auftrag a JOIN singleshipment_order s ON a.id=s.order_id
     WHERE a.status='freigegeben' OR a.status='abgeschlossen'");
