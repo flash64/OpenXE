@@ -577,11 +577,11 @@ class Acl
 
     $this->app->Tpl->Set('LOGINWARNING_VISIBLE', 'hidden');
 
-    $result = $this->CheckHtaccess();
-    if ($result !== true) {
-        $this->app->Tpl->Set('LOGINWARNING_VISIBLE', '');
-      $this->app->Tpl->Set('LOGINWARNING_TEXT', "Achtung: Zugriffskonfiguration (htaccess) fehlerhaft. Bitte wenden Sie sich an Ihren an Ihren Administrator. <br>($result)");
-    }
+    //$result = $this->CheckHtaccess();
+    //if ($result !== true) {
+    //    $this->app->Tpl->Set('LOGINWARNING_VISIBLE', '');
+    //  $this->app->Tpl->Set('LOGINWARNING_TEXT', "Achtung: Zugriffskonfiguration (htaccess) fehlerhaft. Bitte wenden Sie sich an Ihren an Ihren Administrator. <br>($result)");
+    //}
 
     if($this->IsInLoginLockMode() === true)
     {
