@@ -2608,6 +2608,35 @@ select a.kundennummer, (SELECT name FROM adresse a2 WHERE a2.kundennummer = a.ku
           $newarr[] = $arr[$i]['name'];
         }
         break;
+        case "seriennummerverfuegbar":
+            $artikel = (int)$this->app->Secure->GetGET('artikel');
+            $lieferschein = (int)$this->app->Secure->GetGET('lieferschein');
+
+            $sql = "
+                SELECT DISTINCT
+                    s.seriennummer
+                FROM    
+                    seriennummern s
+                INNER JOIN
+                    lieferschein_position lp ON lp.artikel = s.artikel
+                WHERE
+                    s.eingelagert = 1
+                    AND s.seriennummer LIKE '%$term%' 
+                    AND (s.artikel = '$artikel' OR '$artikel' = '0')                 
+                LIMIT 20
+            ";
+
+            //echo($sql);
+
+            $arr = $this->app->DB->SelectArr($sql);
+
+            $carr = !empty($arr)?count($arr):0;
+            for($i = 0; $i < $carr; $i++) {
+              $newarr[] = $arr[$i]['seriennummer'];
+            }
+        break;
+
+        break;
       case "artikelmengeinbeleg":
         $beleg = $this->app->Secure->GetGet('beleg');
         $belegid = $this->app->Secure->GetGet('id');
@@ -4013,6 +4042,17 @@ select a.kundennummer, (SELECT name FROM adresse a2 WHERE a2.kundennummer = a.ku
           $newarr[] = $arr[$i]['bezeichnung'];
         }
         break;
+      break;
+      case "konto":
+        $cmd = $this->app->Secure->GetGET("cmd");
+
+        $arr = $this->app->DB->SelectArr("
+            SELECT CONCAT(kurzbezeichnung,' ',bezeichnung) as name FROM konten
+            WHERE (kurzbezeichnung LIKE '%$term%' OR bezeichnung LIKE '%$term%') ORDER by kurzbezeichnung");
+
+        $carr = !empty($arr)?count($arr):0;
+        for($i = 0; $i < $carr; $i++)
+          $newarr[] = $arr[$i]['name'];
       break;
       case "datevkonto":
         $arr = $this->app->DB->SelectArr("SELECT DISTINCT t.gegenkonto FROM
