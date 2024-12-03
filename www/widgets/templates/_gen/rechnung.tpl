@@ -21,7 +21,10 @@
                      <!-- // ende anfang -->
                      <table width="100%" align="center">
                         <tr>
-                           <td>&nbsp;<b style="font-size: 14pt">Rechnung <font color="blue">[NUMMER]</font></b>[KUNDE][RABATTANZEIGE]</td>
+                           <td>&nbsp;
+                                <b style="font-size: 14pt" [BELEGNRHIDDEN]>Rechnung <font color="blue">[NUMMER]</font></b>
+                                <b style="font-size: 14pt" [BELEGNREDITHIDDEN]>Rechnung <input id="belegnredit" type="text" style="" name="belegnredit" value="[NUMMER]"><font color="blue"></font></input></b>                                
+                                [KUNDE][RABATTANZEIGE]</td>
                            <td></td>
                            <td align="right" nowrap>[ICONMENU]&nbsp;[SAVEBUTTON]</td>
                         </tr>
@@ -95,6 +98,10 @@
                            <tr>
                               <td>[ABWEICHENDEBEZEICHNUNGBESCHRIFTUNG]:</td>
                               <td>[ABWEICHENDEBEZEICHNUNG][MSGABWEICHENDEBEZEICHNUNG]&nbsp;</td>
+                           </tr>
+                           <tr>
+                              <td>{|XML-Rechnung|}:</td>
+                              <td>[ERECHNUNG][MSGERECHNUNG]&nbsp;</td>
                            </tr>
                         </table>
                      </fieldset>
