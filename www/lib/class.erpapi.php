@@ -2687,7 +2687,7 @@ function LieferscheinEinlagern($id,$grund="Lieferschein Einlagern", $lpiids = nu
   // @refactor LagerBeleg Modul
   // Returns Array:
   // storageMovements => array('lager_platz', 'artikel', 'menge');
-  function LieferscheinAuslagern($lieferschein,$anzeige_lagerplaetze_in_lieferschein=false, $standardlager = 0, $belegtyp = 'lieferschein', $chargenmhdnachprojekt = 0, $forceseriennummerngeliefertsetzen = false,$nurrestmenge = false, $lager_platz_vpe = 0, $lpiid = 0, $simulieren = false)
+  function LieferscheinAuslagern($lieferschein,$anzeige_lagerplaetze_in_lieferschein=false, $belegtyp = 'lieferschein', $chargenmhdnachprojekt = 0, $forceseriennummerngeliefertsetzen = false,$nurrestmenge = false, $lager_platz_vpe = 0, $lpiid = 0, $simulieren = false, $ziellagerplatz = null)
   {
     if($lieferschein <= 0) {
       return;
@@ -2708,6 +2708,7 @@ function LieferscheinEinlagern($id,$grund="Lieferschein Einlagern", $lpiids = nu
         $belegtyp, (int)$lieferschein
       )
     );
+    $standardlager = $belegarr['standardlager'];
     $kommissionskonsignationslager = 0;
     if($belegtyp === 'lieferschein'){
       $kommissionskonsignationslager = $belegarr['kommissionskonsignationslager'];
@@ -2794,11 +2795,16 @@ function LieferscheinEinlagern($id,$grund="Lieferschein Einlagern", $lpiids = nu
         );
       }
     }
+
     if($standardlager == 0) {
       if($projekt > 0){
-        $projektlager = $this->app->DB->Select("SELECT projektlager FROM projekt WHERE id='$projekt'");
+        $standardlager = $this->app->DB->Select("SELECT standardlager FROM projekt WHERE id='$projekt'");
+        if($standardlager == 0) {
+           $projektlager = $this->app->DB->Select("SELECT projektlager FROM projekt WHERE id='$projekt'");
+        }
       }
     }
+
     $storageLocations = [];
     $storageMovements = [];
     $cartikel = $artikelarr?count($artikelarr):0;
@@ -20764,6 +20770,7 @@ function ChargenMHDAuslagern($artikel, $menge, $lagerplatztyp, $lpid,$typ,$wert,
           )
         );
         $kommissionierverfahren= $projectArr['kommissionierverfahren'];
+        $projektbevorzugteslager = $projectArr['standardlager'];
         if(
         !($kommissionierverfahren==='lieferscheinlager' ||
           $kommissionierverfahren==='lieferscheinlagerscan' ||
@@ -20801,7 +20808,7 @@ function ChargenMHDAuslagern($artikel, $menge, $lagerplatztyp, $lpid,$typ,$wert,
       $isBatch = false;
       $isSn = false;
     }
-    if($standardlager > 0)
+    if($standardlager > 0) // Standardlager beleg
     {
       $summe_im_lager = round(
         $this->app->DB->Select(
@@ -20875,7 +20882,7 @@ function ChargenMHDAuslagern($artikel, $menge, $lagerplatztyp, $lpid,$typ,$wert,
         ),
         $this->GetLagerNachkommastellen()
       );
-    }elseif($projektlager > 0)
+    }elseif($projektlager > 0) // Projektlager
     {
       $summe_im_lager = round(
         $this->app->DB->Select(
@@ -20930,15 +20937,25 @@ function ChargenMHDAuslagern($artikel, $menge, $lagerplatztyp, $lpid,$typ,$wert,
       }
       $artikel_reserviert = round($this->app->DB->Select("SELECT SUM(menge) 
         FROM lager_reserviert WHERE artikel='".$artikel."' AND projekt='$projekt' AND (datum>=NOW() OR datum='0000-00-00')"),$this->GetLagerNachkommastellen());
-    } else {
+    } else { // Normal
       $summe_im_lager = round(
         $this->app->DB->Select(
           sprintf(
-              "SELECT SUM(li.menge) 
-              FROM lager_platz_inhalt AS li 
-              LEFT JOIN lager_platz lp ON lp.id=li.lager_platz WHERE li.artikel= %d
-              AND lp.autolagersperre!=1 AND lp.sperrlager!=1",
-              $artikel
+              "SELECT SUM(li.menge)
+              FROM lager_platz_inhalt AS li
+              INNER JOIN lager_platz lp ON lp.id = li.lager_platz
+              INNER JOIN lager l ON lp.lager = l.id
+              WHERE
+                li.artikel= %d
+              AND
+                (l.id) = %d OR (%d = 0)
+              AND
+                lp.autolagersperre!=1 
+              AND
+                lp.sperrlager!=1",
+              $artikel,
+              $projektbevorzugteslager,
+              $projektbevorzugteslager
           )
         ),
         $this->GetLagerNachkommastellen()
@@ -20997,6 +21014,7 @@ function ChargenMHDAuslagern($artikel, $menge, $lagerplatztyp, $lpid,$typ,$wert,
       return 1;
     }
 
+/*
     if($standardlager) {
       $nichtStandardlager = round($summe_im_lager_gesamt - $summe_im_lager,8);
       if($nichtStandardlager > 0 ) {
@@ -21009,7 +21027,7 @@ function ChargenMHDAuslagern($artikel, $menge, $lagerplatztyp, $lpid,$typ,$wert,
           return 1;
         }
       }
-    }
+    }*/
 
     if($objekt === 'auftrag' && $artikel_fuer_adresse_reserviert > 0)
     {
@@ -33068,12 +33086,22 @@ function Firmendaten($field,$projekt="")
         }
       }
 
-      function CreateVerbindlichkeit($adresse="")
+      function CreateVerbindlichkeit($adresse="", $datum = null)
       {
         /** @var Verbindlichkeit $obj */
         $obj = $this->app->erp->LoadModul('verbindlichkeit');
         if(!empty($obj) && method_exists($obj,'createLiability')) {
-          return $obj->createLiability($adresse);
+          return $obj->createLiability($adresse, $datum);
+        }
+        return 0;
+      }
+
+      function CreateLieferantengutschrift($adresse="", $datum = null)
+      {
+        /** @var Verbindlichkeit $obj */
+        $obj = $this->app->erp->LoadModul('lieferantengutschrift');
+        if(!empty($obj) && method_exists($obj,'createlieferantengutschrift')) {
+          return $obj->createlieferantengutschrift($adresse, $datum);
         }
         return 0;
       }
@@ -36858,6 +36886,59 @@ function Firmendaten($field,$projekt="")
         return false;
       }
 
+        function GetBelegTickets($doctype, $doctypeid) {
+            $sql = "
+                SELECT DISTINCT
+                    t.id,
+                    tn.ticket
+                FROM
+                    `datei_stichwoerter` dst
+                INNER JOIN `datei_stichwoerter` dsb ON
+                    dst.datei = dsb.datei
+                INNER JOIN `ticket_nachricht` tn ON
+                    tn.id = dst.parameter
+                INNER JOIN `ticket` t ON
+                    t.schluessel = tn.ticket
+                WHERE
+                    dst.objekt = 'Ticket' AND dsb.objekt = '".$doctype."' AND dsb.parameter = '".$doctypeid."'
+            ";
+            return($this->app->DB->SelectArr($sql));
+        }
+
+        function GetTicketBelege($ticketid) {
+            $sql = "
+                SELECT DISTINCT
+                    dsb.objekt doctype,
+                    dsb.parameter id,
+                    belege.belegnr,
+                    belege.externenr
+                FROM
+                    `datei_stichwoerter` dst
+                INNER JOIN `datei_stichwoerter` dsb ON
+                    dst.datei = dsb.datei
+                INNER JOIN `ticket_nachricht` tn ON
+                    tn.id = dst.parameter
+                INNER JOIN `ticket` t ON
+                    t.schluessel = tn.ticket
+                INNER JOIN
+                (
+                    SELECT 'Auftrag' typ, id belegid, belegnr, ihrebestellnummer externenr, datum, name FROM auftrag
+                    UNION
+                    SELECT 'Verbindlichkeit', v.id, v.belegnr, rechnung, v.datum, a.name FROM verbindlichkeit v LEFT JOIN adresse a ON v.adresse = a.id
+                    UNION
+                    SELECT 'Lieferantengutschrift', lg.id, lg.belegnr, rechnung, lg.datum, a.name FROM lieferantengutschrift lg LEFT JOIN adresse a ON lg.adresse = a.id
+                ) belege ON belege.typ = dsb.objekt AND belege.belegid = dsb.parameter
+                WHERE
+                    dsb.objekt IN(
+                        'lieferantengutschrift',
+                        'auftrag',
+                        'verbindlichkeit'
+                    ) AND t.id = '".$ticketid."'
+            ";
+
+            return($this->app->DB->SelectArr($sql));
+        }
+
       function GetDateiName($id)
       {
         $version = $this->app->DB->Select("SELECT MAX(version) FROM datei_version WHERE datei='$id'");
@@ -36875,6 +36956,13 @@ function Firmendaten($field,$projekt="")
         $tmp = pathinfo($newid);
 
         return strtolower($tmp['extension']);
+      }
+
+      function GetDateiDatum($id) // MYSQL format
+      {
+        $version = $this->app->DB->Select("SELECT MAX(version) FROM datei_version WHERE datei='$id'");
+        $date = $this->app->DB->Select("SELECT datum FROM datei_version WHERE datei='$id' AND version='$version' LIMIT 1");
+        return ($date);
       }
 
     /*
