@@ -537,6 +537,28 @@ class Versandpakete {
         $this->versandpakete_menu();
         $this->app->YUI->TableSearch('TAB1', 'versandpakete_lieferscheine', "show", "", "", basename(__FILE__), __CLASS__);
         $this->app->Tpl->SetText('KURZUEBERSCHRIFT2', 'Lieferungen');
+
+        $submit = $this->app->Secure->GetPOST('submit');
+
+        switch ($submit) {
+            case 'lieferscheinscan':
+                $lieferschein_post = $this->app->Secure->GetPOST('lieferschein');
+                $lieferschein = $this->app->erp->ReplaceLieferschein(true, $lieferschein_post, true); // Parameters: Target db?, value, from form?
+                $lieferschein_belegnr = $this->app->erp->ReplaceLieferschein(false, $lieferschein_post, true); // Parameters: Target db?, value, from form?
+                if (!empty($lieferschein)) {
+                    $completion =  $this->versandpakete_check_completion($lieferschein, null);
+                    if ($completion === null) {
+                        $this->app->Location->execute("Location: index.php?module=versandpakete&action=add&lieferschein=".$lieferschein);
+                    } else {
+                        $this->app->Location->execute("Location: index.php?module=versandpakete&action=lieferung&id=".$lieferschein);
+                    }
+                }
+
+            break;
+        }
+
+        $this->app->YUI->AutoComplete("lieferschein", "lieferschein");
+
         $this->app->Tpl->Parse('PAGE', "versandpakete_lieferungen.tpl");
     }
 
@@ -906,11 +928,44 @@ class Versandpakete {
         switch ($submit) {
             case 'hinzufuegen':
 
-                if ($menge == '') {
-                    $menge = 1;
+                if (empty($artikel_input)) {
+                    $gescannterartikel = $this->app->Secure->GetPOST('gescannterartikel');
+                    $artikel = $this->app->erp->ReplaceArtikel(true, $gescannterartikel,true); // Parameters: Target db?, value, from form?
                 }
 
-                if ($menge < 0) {
+                // Scan
+                if ($menge == '') {
+                    $gescannterartikel = $artikel_input;
+                    if (!empty($gescannterartikel)) {
+                        $sql = "SELECT SUM(vlp.menge) FROM versandpaket_lieferschein_position vlp INNER JOIN lieferschein_position lp ON lp.id = vlp.lieferschein_position WHERE lieferschein = ".$lieferschein." AND lp.artikel = ".$artikel."";
+                        $menge_in_paketen = $this->app->DB->Select($sql)+0;
+                        $sql = "SELECT SUM(lp.menge) FROM lieferschein_position lp WHERE lieferschein = ".$lieferschein." AND lp.artikel = ".$artikel."";
+                        $menge_im_lieferschein = $this->app->DB->Select($sql)+0;
+
+                        if ($menge_im_lieferschein-$menge_in_paketen > 1) { // Restmenge -> Weiterscannen
+                            $this->app->Tpl->Set('GESCANNTERARTIKELRESTMENGE', $menge_im_lieferschein-$menge_in_paketen);
+                            $gescannterartikel = strtok($gescannterartikel,' ');
+                            $gescanntemenge = 1;
+                            $this->app->Tpl->Set('MENGE', $gescanntemenge);
+                            $this->app->Tpl->Set('GESCANNTEMENGE', $gescanntemenge);
+                            $artikelinfo = $this->app->DB->SelectRow("SELECT name_de, standardbild FROM artikel WHERE id = '".$artikel."'");
+                            $gescannterartikelname = $artikelinfo['name_de'];
+                            $standardbild = $artikelinfo['standardbild'];
+                            if ($standardbild == '') {
+                                $standardbild = $this->app->DB->Select("SELECT datei FROM datei_stichwoerter WHERE subjekt='Shopbild' AND objekt='Artikel' AND parameter='$artikel' LIMIT 1");
+                                if ($standardbild > 0) {
+                                    $this->app->Tpl->Add('ARTIKELBILD', "<tr valign=\"top\"><td>Bild:</td><td align=\"left\"><img src=\"index.php?module=dateien&action=send&id=$standardbild\" width=\"110\"></td></tr>");
+                                }
+                            }
+                            $this->app->Tpl->Set('GESCANNTERARTIKEL', $gescannterartikel);
+                            $this->app->Tpl->Set('GESCANNTERARTIKELTEXT', $gescannterartikel." - ".$gescannterartikelname);
+                            $this->app->Tpl->Set('ZOOMSTYLE', "font-size: 200%;");
+                        } else {
+                            $menge = 1; // Buchen
+                        }
+
+                    }
+                } else if ($menge < 0) {
                     $msg .= "<div class=\"error\">Falsche Mengenangabe.</div>";
                     break;
                 }
@@ -961,7 +1016,7 @@ class Versandpakete {
                 if ($menge > 0) {
                     $msg .= "<div class=\"error\">Menge wurde angepasst auf ".$buchmenge_gesamt.".</div>";
                 }
-                if ($buchmenge > 0) {                
+                if ($buchmenge > 0) {
                     $sql = "SELECT SUM(vlp.menge) FROM versandpaket_lieferschein_position vlp INNER JOIN lieferschein_position lp ON lp.id = vlp.lieferschein_position WHERE lieferschein = ".$lieferschein." AND lp.artikel = ".$artikel."";
                     $menge_in_paketen = $this->app->DB->Select($sql)+0;
                     $sql = "SELECT SUM(lp.menge) FROM lieferschein_position lp WHERE lieferschein = ".$lieferschein." AND lp.artikel = ".$artikel."";
@@ -1242,7 +1297,6 @@ class Versandpakete {
                                 l.name,
                                 lp.menge lmenge,
                                 SUM(vlp.menge) vmenge,
-                                GROUP_CONCAT(vop.id) vop,
                                 BIT_OR(COALESCE(v.status,0) IN ('versendet')) AS eins_versendet,
                                 BIT_AND(COALESCE(v.status,0) IN ('versendet')) AS alle_versendet,
                                 BIT_OR(COALESCE(v.status,0) IN ('abgeschlossen')) AS eins_abgeschlossen,
@@ -1252,12 +1306,13 @@ class Versandpakete {
                             INNER JOIN lieferschein_position lp ON lp.lieferschein = l.id
                             LEFT JOIN versandpaket_lieferschein_position vlp ON vlp.lieferschein_position = lp.id
                             LEFT JOIN versandpakete v ON vlp.versandpaket = v.id
-                            LEFT JOIN versandpakete vop ON vop.lieferschein_ohne_pos = l.id
                             LEFT JOIN projekt p ON p.id = l.projekt
+                            LEFT JOIN artikel a ON lp.artikel = a.id
                             WHERE
                                 l.versand_status <> 0 AND
                                 l.belegnr <> '' AND
                                 (v.status <> 'storniert' OR v.status IS NULL)
+                                AND a.lagerartikel
                             GROUP BY lp.id
                 ";
 
@@ -1272,8 +1327,7 @@ class Versandpakete {
                         eins_versendet,
                         alle_versendet,
                         eins_abgeschlossen,
-                        alle_abgeschlossen,
-                        vop
+                        alle_abgeschlossen
                     FROM (
                         ".$sql_lieferschein_position."
                     ) lp
@@ -1290,7 +1344,7 @@ class Versandpakete {
                             ".$app->erp->FormatMenge("vmenge").",
                             projekt,
                             ".$app->YUI->IconsSQL_lieferung().",
-                            if(vmenge > 0 OR vop IS NOT NULL,CONCAT('<a href=\"index.php?module=versandpakete&action=lieferung&id=',id,'\"><img src=\"themes/{$app->Conf->WFconf['defaulttheme']}/images/forward.svg\" title=\"Pakete anzeigen\" border=\"0\"></a>'),''),
+                            if(vmenge > 0,CONCAT('<a href=\"index.php?module=versandpakete&action=lieferung&id=',id,'\"><img src=\"themes/{$app->Conf->WFconf['defaulttheme']}/images/forward.svg\" title=\"Pakete anzeigen\" border=\"0\"></a>'),''),
                             id,
                             alle_abgeschlossen
                         FROM (
