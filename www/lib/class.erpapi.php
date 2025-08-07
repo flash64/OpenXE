@@ -1811,6 +1811,13 @@ public function NavigationHooks(&$menu)
     return $sprache;
   }
 
+  public function GetSpracheBelegPosition($type, $id) {
+    $sql = "SELECT beleg.id FROM ".$type." beleg INNER JOIN ".$type."_position pos ON pos.".$type." = beleg.id WHERE pos.id = ".$id." LIMIT 1";
+    $beleg = $this->app->DB->Select($sql);
+    $sprache = $this->GetSpracheBeleg($type,$beleg);
+    return($sprache);
+  }
+
   public function GetSpracheBelegISO($type, $id)
   {
     $language = $this->GetSpracheBeleg($type, $id);
@@ -25568,7 +25575,6 @@ function MailSendFinal($from,$from_name,$to,$to_name,$betreff,$text,$files="",$p
         }
       }
     }
-
     if($id){
       if(!empty($this->uebersetzungId[$field]) && isset($this->uebersetzungId[$field][$sprache])){
         return $this->uebersetzungId[$field][$sprache];
@@ -25578,7 +25584,6 @@ function MailSendFinal($from,$from_name,$to,$to_name,$betreff,$text,$files="",$p
         return $this->uebersetzungBeschriftung[$field][$sprache];
       }
     }
-
     return null;
   }
 
@@ -32021,9 +32026,9 @@ function Firmendaten($field,$projekt="")
 
         if($nurlagerartikel)
         {
-          $pos = $this->app->DB->SelectArr("SELECT ap.*,art.porto AS artikelporto FROM auftrag_position ap INNER JOIN artikel art ON ap.artikel = art.id AND (art.lagerartikel = 1 OR (art.stueckliste = 1 AND art.juststueckliste = 1)) WHERE ap.auftrag='$id' $poswheretmp order by ap.sort");
+          $pos = $this->app->DB->SelectArr("SELECT ap.*,art.porto AS artikelporto FROM auftrag_position ap INNER JOIN artikel art ON ap.artikel = art.id AND (art.lagerartikel = 1 OR (art.stueckliste = 1 AND art.juststueckliste = 1)) WHERE ap.auftrag='$id' AND ap.menge > 0 $poswheretmp ORDER BY ap.sort");
         }else{
-          $pos = $this->app->DB->SelectArr("SELECT ap.*,art.porto AS artikelporto FROM auftrag_position ap LEFT JOIN artikel art ON ap.artikel = art.id WHERE ap.auftrag='$id' $poswheretmp order by ap.sort");
+          $pos = $this->app->DB->SelectArr("SELECT ap.*,art.porto AS artikelporto FROM auftrag_position ap LEFT JOIN artikel art ON ap.artikel = art.id WHERE ap.auftrag='$id' AND ap.menge > 0 $poswheretmp ORDER BY ap.sort");
         }
 
         if(empty($pos))
@@ -39225,7 +39230,7 @@ function Firmendaten($field,$projekt="")
 
 
 
-  function AnzeigeFreifelderPositionen($form = null)
+  function AnzeigeFreifelderPositionen($form = null, $language = null)
   {
 
     $module = $this->app->Secure->GetGET('module');
@@ -39252,7 +39257,13 @@ function Firmendaten($field,$projekt="")
       }
       elseif($this->Firmendaten('freifeld'.$i.'typ') === 'select') {
         $id = $this->app->Secure->GetGET('id');
-        $options = explode('|',$this->Firmendaten('freifeld'.$i));
+
+        if ($language != null && $language != 'deutsch') {
+            $freifeldwert = html_entity_decode($this->app->erp->getUebersetzung('artikel_freifeld'.$i,$language,id: false));
+        } else {
+            $freifeldwert =  $this->Firmendaten('freifeld'.$i);
+        }
+        $options = explode('|',$freifeldwert);
         unset($options[0]);
         if($form !== null) {
           $field = new HTMLSelect('freifeld'.$i,0,'freifeld'.$i,'','','0');
