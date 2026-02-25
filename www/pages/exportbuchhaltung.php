@@ -165,13 +165,26 @@ class Exportbuchhaltung
         $lgchecked = $this->app->Secure->GetPOST("lieferantengutschrift");
         $diffignore = $this->app->Secure->GetPOST("diffignore");
     	$sachkonto = $this->app->Secure->GetPOST('sachkonto');
-        $format = $this->app->Secure->GetPOST('format');
+        $this->app->User->SetParameter('exportbuchhaltung_sachkonto', $sachkonto?:null);
+        $sachkonto = $this->app->User->GetParameter('exportbuchhaltung_sachkonto');
+        $sachkontofehlend = $this->app->Secure->GetPOST('sachkontofehlend');
+        $this->app->User->SetParameter('exportbuchhaltung_sachkontofehlend', $sachkontofehlend?:null);
+        $sachkontofehlend = $this->app->User->GetParameter('exportbuchhaltung_sachkontofehlend');
         $pdfexport = $this->app->Secure->GetPOST("pdfexport");
+        $this->app->User->SetParameter('exportbuchhaltung_pdfexport', $pdfexport?:null);
+        $pdfexport = $this->app->User->GetParameter('exportbuchhaltung_pdfexport');
+
+        $format = $this->app->Secure->GetPOST('format');
+
 	    $account_id = null;
     	if (!empty($sachkonto)) {
     	    $sachkonto_kennung = explode(' ',$sachkonto)[0];
-                $account_id = $this->app->DB->SelectArr("SELECT id from kontorahmen WHERE sachkonto = '".$sachkonto_kennung."'")[0]['id'];
+            $account_id = $this->app->DB->SelectArr("SELECT id from kontorahmen WHERE sachkonto = '".$sachkonto_kennung."'")[0]['id'];
     	}
+        if (!empty($sachkontofehlend)) {
+            $sachkontofehlend_kennung = explode(' ',$sachkontofehlend)[0];
+            $account_id_fehlend = $this->app->DB->SelectArr("SELECT id from kontorahmen WHERE sachkonto = '".$sachkontofehlend."'")[0]['id'];
+        }
 
         $msg = "";
 
@@ -245,9 +258,89 @@ class Exportbuchhaltung
             }
 
             if ($dataok) {
+                $belege = array();
+                $typen = $this->typen($rgchecked, $gschecked, $vbchecked, $lgchecked);
+                foreach ($typen as $typkey => $typvalue) {
+                    if (!$typvalue['do']) {
+                        continue;
+                    }
+                    $where = "b.".$typvalue['field_date']." BETWEEN '".date_format($von,"Y-m-d")."' AND '".date_format($bis,"Y-m-d")."' AND (b.projekt=$projekt OR $projekt=0)".$typvalue['condition_where'];
+                    $sql = "SELECT
+                        b.id,
+                        " . $typvalue['field_belegnr'] . " as belegnr,
+                        " . $typvalue['field_auftrag'] . " as auftrag,
+                        " . $typvalue['field_zahlweise'] . " as zahlweise,
+                        if(" . $typvalue['field_kontonummer'] . " <> ''," . $typvalue['field_kontonummer'] . "," . $typvalue['field_kundennummer'] . ") as kundennummer,
+                        " . $typvalue['field_name'] . " as name,
+                        a.ustid,
+                        b." . $typvalue['field_date'] . " as datum,
+                        " . $typvalue['field_betrag_gesamt'] . " as betrag_gesamt,
+                        b.waehrung,
+                        UUID() uuid
+                    FROM
+                        " . $typvalue['typ'] . " b
+                            INNER JOIN
+                        adresse a ON a.id = b.adresse
+                            WHERE
+                        " . $where;
+
+                    $belegearr = $this->app->DB->SelectArr($sql);
+
+		    $belege[$typkey]['table'] = $typvalue['typ'];
+		    $belege[$typkey]['kennzeichen'] = $typvalue['kennzeichen'];
+		    $belege[$typkey]['kennzeichen_negativ'] = $typvalue['kennzeichen_negativ'];
+		    $belege[$typkey]['field_gegenkonto'] = $typvalue['field_gegenkonto'];
+
+                    foreach ($belegearr as $value) {
+                        $belege[$typkey]['belege'][$value['id']] = $value;
+                        $belege[$typkey]['belege'][$value['id']]['typ'] = $typvalue['typ'];
+                    }
+
+                    // Hole alle Positionen dazu
+                    if (!empty($typvalue['field_gegenkonto'])) {
+                        $sql_gegenkonto = $typvalue['field_gegenkonto'];
+                    } else {
+                        $sql_gegenkonto = "NULL";
+                    }
+
+                    $sql = "SELECT
+                        b.id as beleg_id,
+                        p.id as pos_id,
+                        ROUND(" . $typvalue['field_betrag'] . ",2) as betrag,
+                        " . $sql_gegenkonto . " as gegenkonto,
+                        b.waehrung as pos_waehrung
+                    FROM
+                        " . $typvalue['typ'] . " b
+                            LEFT JOIN
+                        " . $typvalue['subtable'] . " p
+                            ON
+                        b.id = p." . $typvalue['typ'] . "
+                            WHERE
+                        " . $where;
+
+                    $posarr = $this->app->DB->SelectArr($sql);
+
+                    foreach ($posarr as $pos) {
+                        $belege[$typkey]['belege'][$pos['beleg_id']]['positionen'][] = $pos;
+                    }
+                } // foreach typen
+
                 $filename_csv = "EXTF_".date('Ymd') . "_Buchungsstapel_DATEV_export.csv";
                 try {
-                    $csv = $this->DATEV_Buchuchungsstapel($rgchecked, $gschecked, $vbchecked, $lgchecked, $buchhaltung_berater, $buchhaltung_mandant, $buchhaltung_wj_beginn, $buchhaltung_sachkontenlaenge, $von, $bis, $projekt, $filename_csv, $diffignore, $sachkonto_kennung, $format);
+                    $csv = $this->DATEV_Buchuchungsstapel(
+                        beleg_data: $belege,
+                        berater: $buchhaltung_berater,
+                        mandant: $buchhaltung_mandant,
+                        wj_beginn: $buchhaltung_wj_beginn,
+                        sachkontenlaenge: $buchhaltung_sachkontenlaenge,
+                        von: $von,
+                        bis: $bis,
+                        filename: $filename_csv,
+                        diffignore: $diffignore,
+                        sachkonto_differences: $sachkonto_kennung,
+                        sachkonto_missing: $sachkontofehlend_kennung,
+                        format: $format
+                    );
 
                     if ($pdfexport) {
 
@@ -256,32 +349,32 @@ class Exportbuchhaltung
                         $zip = new ZipArchive;
                         $zip->open($dateinamezip, ZipArchive::CREATE);
 
-                        $zip->addFromString($typ['typ']."/".$filename_csv, $csv);
+                        $zip->addFromString("/".$filename_csv, $csv);
 
                         $typen = $this->typen($rgchecked, $gschecked, $vbchecked, $lgchecked);
 
-                        foreach ($typen as $typ) {
+                        foreach ($typen as $typvalue) {
                             $sql = "
-                                SELECT id, ".$typ['field_belegnr']." belegnr FROM ".$typ['typ']." b
+                                SELECT id, ".$typvalue['field_belegnr']." belegnr FROM ".$typvalue['typ']." b
                                 WHERE
-                                b.".$typ['field_date']." BETWEEN '".date_format($von,"Y-m-d")."' AND '".date_format($bis,"Y-m-d")."' AND (b.projekt=$projekt OR $projekt=0)".$typ['condition_where'];
+                                b.".$typvalue['field_date']." BETWEEN '".date_format($von,"Y-m-d")."' AND '".date_format($bis,"Y-m-d")."' AND (b.projekt=$projekt OR $projekt=0)".$typvalue['condition_where'];
                             $belege = $this->app->DB->SelectArr($sql);
 
                             foreach ($belege as $beleg) {
-                                if (!$typ['do']) {
+                                if (!$typvalue['do']) {
                                     continue;
                                 }
 
-                                $action = $typ['pdf'];
+                                $action = $typvalue['pdf'];
 
-                                if ($typ['typ'] == 'rechnung') {
+                                if ($typvalue['typ'] == 'rechnung') {
                                     if ($this->app->DB->Select("SELECT xmlrechnung FROM rechnung WHERE id = ".$beleg['id'])) {
                                         $action = 'load';
                                     }
                                 }
                                 switch ($action) {
                                     case 'print':
-                                        switch ($typ['typ']) {
+                                        switch ($typvalue['typ']) {
                                             case 'rechnung':
                                                 if(class_exists('GutschriftPDFCustom')) {
                                                     $Brief = new RechnungPDFCustom($this->app,$projekt);
@@ -306,10 +399,10 @@ class Exportbuchhaltung
                                         }
                                         $tmpfile = $Brief->displayTMP();
                                         $file_name = $beleg['belegnr'].".pdf";
-                                        $zip->addFromString($typ['typ']."/".$file_name, file_get_contents($tmpfile));
+                                        $zip->addFromString($typvalue['typ']."/".$file_name, file_get_contents($tmpfile));
              			            break;
                                     case 'load':
-                                        $file_attachments = $this->app->erp->GetDateiSubjektObjekt('%',$typ['typ'],$beleg['id']);
+                                        $file_attachments = $this->app->erp->GetDateiSubjektObjekt('%',$typvalue['typ'],$beleg['id']);
                                         $suffix = "";
                                         $count = 0;
                                         foreach ($file_attachments as $file_attachment) {
@@ -317,7 +410,7 @@ class Exportbuchhaltung
                                             if (in_array($ending,['pdf','xml'])) {
                                                 $file_contents = $this->app->erp->GetDatei($file_attachment);
                                                 $file_name = filter_var($beleg['belegnr'],FILTER_SANITIZE_EMAIL).$suffix.".".$ending;
-                                                $zip->addFromString($typ['typ']."/".$file_name, $file_contents);
+                                                $zip->addFromString($typvalue['typ']."/".$file_name, $file_contents);
                                                 $count++;
                                                 $suffix = "_".$count;
                                             }
@@ -343,13 +436,11 @@ class Exportbuchhaltung
                     $this->app->ExitXentral();
                 }
                 catch (ConsistencyException $e) {
-                    $msg = "<div class=error>Inkonsistente Daten (".$e->getMessage()."): <br>";
-
+                    $msg = "<div class=error>Inkonsistente Daten: <br>";
                     $data = $e->getData();
-
                     $count = 0;
                     foreach($data as $item) {
-                        $msg .= $item['typ']." ".$item['belegnr']." (Kopf ".$this->app->erp->ReplaceMengeBetrag(false,$item['betrag_gesamt'],false)." Positionen ".$this->app->erp->ReplaceMengeBetrag(false,$item['betrag_summe'],false).")<br>";
+                        $msg .= ucfirst($item['typ'])." ".$item['belegnr']." (Kopf ".$this->app->erp->ReplaceMengeBetrag(false,$item['betrag_gesamt'],false)." Positionen ".$this->app->erp->ReplaceMengeBetrag(false,$item['betrag_summe'],false).")<br>";
                         $count++;
                         if ($count == 10) {
                             $msg .= "...";
@@ -368,6 +459,7 @@ class Exportbuchhaltung
         $this->app->YUI->DatePicker("von");
         $this->app->YUI->DatePicker("bis");
         $this->app->YUI->AutoComplete('sachkonto', 'sachkonto');
+        $this->app->YUI->AutoComplete('sachkontofehlend', 'sachkonto');
 
         $this->app->Tpl->SET('MESSAGE', $msg);
 
@@ -382,6 +474,7 @@ class Exportbuchhaltung
         $this->app->Tpl->SET('BIS', $bis_form);
         $this->app->Tpl->SET('PROJEKT', $projektkuerzel);
         $this->app->Tpl->SET('SACHKONTO', $sachkonto);
+        $this->app->Tpl->SET('SACHKONTOFEHLEND', $sachkontofehlend);
 
         $this->app->Tpl->Parse('PAGE', "exportbuchhaltung_export.tpl");
     }
@@ -391,7 +484,7 @@ class Exportbuchhaltung
     * format: "ISO-8859-1", "UTF-8", "UTF-8-BOM"
     * @throws ConsistencyException with string (list of items) if consistency check fails and no sachkonto for differences is given
     */
-    function DATEV_Buchuchungsstapel(bool $rechnung, bool $gutschrift, bool $verbindlichkeit, bool $lieferantengutschrift, string $berater, string $mandant, datetime $wj_beginn, int $sachkontenlaenge, datetime $von, datetime $bis, int $projekt = 0, string $filename = 'EXTF_Buchungsstapel_DATEV_export.csv', $diffignore = false, $sachkonto_differences, string $format = "ISO-8859-1") : string {
+    function DATEV_Buchuchungsstapel($beleg_data, string $berater, string $mandant, datetime $wj_beginn, int $sachkontenlaenge, datetime $von, datetime $bis, string $filename = 'EXTF_Buchungsstapel_DATEV_export.csv', $diffignore = false, $sachkonto_differences, $sachkonto_missing, string $format = "ISO-8859-1") : string {
 
         $datev_header_definition = array (
             '1' => 'Kennzeichen',
@@ -562,6 +655,8 @@ class Exportbuchhaltung
             $kuerzel = $usernamearr[0][0].$usernamearr[1][0];
         }
 
+        $data = array();
+
         $data['Kennzeichen'] = 'EXTF';
         $data['Versionsnummer'] = '700';
         $data['Formatkategorie'] = '21';
@@ -616,152 +711,97 @@ class Exportbuchhaltung
         }
         $csv .= "\r\n";
 
-        // Collate data and transform in RAM
-        $typen = $this->typen($rechnung, $gutschrift, $verbindlichkeit, $lieferantengutschrift);
-        foreach ($typen as $typ) {
+        foreach ($beleg_data as $typ => $belege_zu_typ) {
+            foreach ($belege_zu_typ['belege'] as $beleg) { // Belege
+                $sum_pos = 0;
+                foreach ($beleg['positionen'] as $row) {
 
-            if (!$typ['do']) {
-                continue;
-            }
+                    $posid = $row['pos_id'];
+                    $tmpsteuersatz = 0;
+                    $tmpsteuertext = '';
+                    $erloes = '';
+                    $result = array();
+                    $this->app->erp->GetSteuerPosition($belege_zu_typ['table'], $posid, $tmpsteuersatz, $tmpsteuertext, $erloes);
 
-            if (!empty($typ['field_gegenkonto'])) {
-                $sql_gegenkonto = $typ['field_gegenkonto'];
-            } else
-            {
-                $sql_gegenkonto = "NULL";
-            }
+                    $data = array();
+                    if ($row['betrag'] > 0) {
+                        $data['Umsatz'] = number_format($row['betrag'], 2, ',', ''); // obligatory
+                        $data['Soll-/Haben-Kennzeichen'] = $belege_zu_typ['kennzeichen']; // obligatory
+                    } else if ($row['betrag'] < 0) {
+                        $data['Umsatz'] = number_format(-$row['betrag'], 2, ',', ''); // obligatory
+                        $data['Soll-/Haben-Kennzeichen'] = $belege_zu_typ['kennzeichen_negativ']; // obligatory
+                    } else {
+                        continue;
+                    }
 
-            $sql = "SELECT
-                ".$typ['typ']." id,
-                ".$typ['field_belegnr']." as belegnr,
-                ".$typ['field_auftrag']." as auftrag,
-                ".$typ['field_zahlweise']." as zahlweise,
-                if(".$typ['field_kontonummer']." <> '',".$typ['field_kontonummer'].",".$typ['field_kundennummer'].") as kundennummer,
-                ".$typ['field_name']." as name,
-                a.ustid,
-                b.".$typ['field_date']." as datum,
-                p.id as pos_id,
-                ".$typ['field_betrag_gesamt']." as betrag_gesamt,
-                b.waehrung,
-                ROUND(".$typ['field_betrag'].",2) as betrag,
-                ".$sql_gegenkonto." as gegenkonto,
-                b.waehrung as pos_waehrung
-            FROM
-                ".$typ['typ']." b
-                    LEFT JOIN
-                ".$typ['subtable']." p
-                    ON
-                b.id = p.".$typ['typ']."
-                    INNER JOIN
-                adresse a ON a.id = b.adresse
-                    WHERE
-                b.".$typ['field_date']." BETWEEN '".date_format($von,"Y-m-d")."' AND '".date_format($bis,"Y-m-d")."' AND (b.projekt=$projekt OR $projekt=0)".$typ['condition_where'];
+                    $sum_pos += round($row['betrag'],2);
 
-            // Check consistency of positions
-            if (!$diffignore) {
-                $sql_check = "SELECT *
-                FROM
-                    (
-                    SELECT
-                        id,
-                        belegnr,
-                        datum,
-                        betrag_gesamt,
-                        ROUND(SUM(betrag),2) AS betrag_summe,
-                        waehrung,
-                        kundennummer,
-                        ustid,
-                        auftrag
-                    FROM
-                (".$sql.") posten
-                GROUP BY
-                    id
-                ) summen
-                WHERE betrag_gesamt <> betrag_summe OR betrag_summe IS NULL";
+                    $data['EU-Steuersatz (Bestimmung)'] = number_format($tmpsteuersatz, 2, ',', '');
+                    $data['WKZ Umsatz'] = $row['pos_waehrung'];
+                    $data['Belegfeld 1'] = mb_strimwidth($beleg['belegnr'],0,36);
+                    $data['Konto'] = $beleg['kundennummer']; // obligatory
 
-                $result = $this->app->DB->SelectArr($sql_check);
-                if (!empty($result)) {
+                    if (!empty($belege_zu_typ['field_gegenkonto'])) {
+                        $data['Gegenkonto (ohne BU-Schlüssel)'] = $row['gegenkonto']; // obligatory
+                    } else {
+                        $data['Gegenkonto (ohne BU-Schlüssel)'] = $erloes; // obligatory
+                    }
 
-                    if (!$sachkonto_differences) {
-                        $e = new ConsistencyException(ucfirst($typ['typ']),$result);
-                        throw $e;
-        		    } else {
+                    $data['Belegdatum'] = date_format(date_create($beleg['datum']),"dm"); // obligatory
+                    $data['Buchungstext'] = mb_strimwidth($beleg['name'],0,60);
+                    $data['EU-Mitgliedstaat u. UStID (Bestimmung)'] = $beleg['ustid'];
+
+                    $data['Auftragsnummer'] = ($beleg['auftrag']!=0)?$beleg['auftrag']:'';
+                    $data['Zahlweise'] = $beleg['zahlweise'];
+
+                    $csv .= $this->create_line($datev_buchungsstapel_definition,$data);
+                } // Foreach row
+
+                // Check consistency of positions
+                if (!$diffignore) {
+                    if (abs($sum_pos - $beleg['betrag_gesamt']) >= 0.005) {
+
                         // Create differences entries
-                        foreach ($result as $row) {
+                        $data = array();
+                        $difference = $beleg['betrag_gesamt']-$sum_pos;
 
-                            $posid = $row['pos_id'];
-                            $tmpsteuersatz = 0;
-                            $tmpsteuertext = '';
-                            $erloes = '';
-                            $result = array();
-                            $this->app->erp->GetSteuerPosition($typ['typ'], $posid, $tmpsteuersatz, $tmpsteuertext, $erloes);
+                        $data['Umsatz'] = number_format(abs($difference), 2, ',', ''); // obligatory
+                        $data['EU-Steuersatz (Bestimmung)'] = 0;
+                        $data['WKZ Umsatz'] = $beleg['waehrung'];
+                        $data['Belegfeld 1'] = mb_strimwidth($beleg['belegnr'],0,36);
+                        $data['Konto'] = $beleg['kundennummer'];
+                        $data['Soll-/Haben-Kennzeichen'] = ($difference < 0)?'S':'H'; // obligatory
 
-                            $data = array();
-
-                            $difference = $row['betrag_gesamt']-$row['betrag_summe'];
-
-                            $data['Umsatz'] = number_format(abs($difference), 2, ',', ''); // obligatory
-                            $data['EU-Steuersatz (Bestimmung)'] = 0;
-                            $data['WKZ Umsatz'] = $row['waehrung'];
-                            $data['Belegfeld 1'] = mb_strimwidth($row['belegnr'],0,36);
-                            $data['Konto'] = $row['kundennummer'];
-                            $data['Soll-/Haben-Kennzeichen'] = ($difference < 0)?'S':'H'; // obligatory
-
-                            $data['Gegenkonto (ohne BU-Schlüssel)'] = $sachkonto_differences; // obligatory
-
-                            $data['Belegdatum'] = date_format(date_create($row['datum']),"dm"); // obligatory
+                        $data['Belegdatum'] = date_format(date_create($beleg['datum']),"dm"); // obligatory
+                        if (empty($sum_pos)) {
+                            $data['Beleginfo -Art 1'] = "Hinweis";
+                            $data['Beleginfo -Inhalt 1'] = "Kontierung fehlt";
+                            $data['Buchungstext'] = mb_strimwidth($beleg['name'],0,60);
+                            $data['Gegenkonto (ohne BU-Schlüssel)'] = $sachkonto_missing; // obligatory
+                            if (!$sachkonto_missing) {
+                                $throw_exception = true;
+                            }
+                        } else {
                             $data['Buchungstext'] = "Differenz";
-                            $data['EU-Mitgliedstaat u. UStID (Bestimmung)'] = $row['ustid'];
-                            $data['Auftragsnummer'] = $row['auftrag'];
-                            $data['Zahlweise'] = $row['zahlweise'];
-                		    $csv .= $this->create_line($datev_buchungsstapel_definition,$data);
+                            $data['Gegenkonto (ohne BU-Schlüssel)'] = $sachkonto_differences; // obligatory
+                            if (!$sachkonto_differences) {
+                                $throw_exception = true;
+                            }
                         }
-        		    }
+                        $data['EU-Mitgliedstaat u. UStID (Bestimmung)'] = $beleg['ustid'];
+                        $data['Auftragsnummer'] = $beleg['auftrag'];
+                        $data['Zahlweise'] = $beleg['zahlweise'];
+                        $beleg['betrag_summe'] = $sum_pos;
+                        $differences[] = $beleg;
+                        $csv .= $this->create_line($datev_buchungsstapel_definition,$data);
+                    }
                 }
-            }      // diffignore
+            } // Foreach belege
+        } // Foreach typ
 
-            // Query position data
-            $arr = $this->app->DB->Query($sql);
-            while ($row = $this->app->DB->Fetch_Assoc($arr)) {
-                $posid = $row['pos_id'];
-                $tmpsteuersatz = 0;
-                $tmpsteuertext = '';
-                $erloes = '';
-                $result = array();
-                $this->app->erp->GetSteuerPosition($typ['typ'], $posid, $tmpsteuersatz, $tmpsteuertext, $erloes);
-
-                $data = array();
-
-                if ($row['betrag'] > 0) {
-                    $data['Umsatz'] = number_format($row['betrag'], 2, ',', ''); // obligatory
-                    $data['Soll-/Haben-Kennzeichen'] = $typ['kennzeichen']; // obligatory
-                } else if ($row['betrag'] < 0) {
-                    $data['Umsatz'] = number_format(-$row['betrag'], 2, ',', ''); // obligatory
-                    $data['Soll-/Haben-Kennzeichen'] = $typ['kennzeichen_negativ']; // obligatory
-                } else {
-                    continue;
-                }
-
-                $data['EU-Steuersatz (Bestimmung)'] = number_format($tmpsteuersatz, 2, ',', '');
-                $data['WKZ Umsatz'] = $row['pos_waehrung'];
-                $data['Belegfeld 1'] = mb_strimwidth($row['belegnr'],0,36);
-                $data['Konto'] = $row['kundennummer']; // obligatory
-
-                if (!empty($typ['field_gegenkonto'])) {
-                    $data['Gegenkonto (ohne BU-Schlüssel)'] = $row['gegenkonto']; // obligatory
-                } else {
-                    $data['Gegenkonto (ohne BU-Schlüssel)'] = $erloes; // obligatory
-                }
-
-                $data['Belegdatum'] = date_format(date_create($row['datum']),"dm"); // obligatory
-                $data['Buchungstext'] = mb_strimwidth($row['name'],0,60);
-                $data['EU-Mitgliedstaat u. UStID (Bestimmung)'] = $row['ustid'];
-
-                $data['Auftragsnummer'] = ($row['auftrag']!=0)?$row['auftrag']:'';
-                $data['Zahlweise'] = $row['zahlweise'];
-
-                $csv .= $this->create_line($datev_buchungsstapel_definition,$data);
-            }
+        if ($throw_exception) {
+            $e = new ConsistencyException("",$differences);
+            throw $e;
         }
 
         $csv .= '"0";"S";"EUR";"0";"";"";"1234";"1370";"";"101";"";"";"";"Testbuchung";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"0";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";"";""'; // Testbuchung
