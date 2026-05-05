@@ -1398,7 +1398,7 @@ class Auftrag extends GenAuftrag
     $shopexportstatus = '';
     $auftragArr = $id <=0?null:$this->app->DB->SelectRow(
       sprintf(
-        'SELECT status,projekt,anfrageid,kreditlimit_ok,lieferantenauftrag,art,adresse,shopextstatus,shop,nicht_reservieren,kommission_ok
+        'SELECT status,projekt,anfrageid,kreditlimit_ok,lieferantenauftrag,art,adresse,shopextstatus,shop,nicht_reservieren,kommission_ok,schreibschutz
          FROM auftrag
          WHERE id = %d
          LIMIT 1',
@@ -1414,6 +1414,7 @@ class Auftrag extends GenAuftrag
       $anfrageid = $auftragArr['anfrageid'];
       $kreditlimit_ok = $auftragArr['kreditlimit_ok'];
       $kommission_ok = $auftragArr['kommission_ok'];
+      $schreibschutz = $auftragArr['schreibschutz'];
       $lieferantenauftrag = $auftragArr['lieferantenauftrag'];
       $art = $auftragArr['art'];
     }
@@ -1467,8 +1468,12 @@ class Auftrag extends GenAuftrag
     //$art = $this->app->DB->Select("SELECT art FROM auftrag WHERE id='$id' LIMIT 1");
     $alleartikelreservieren = '';
 
-    if ($status==='angelegt' || $status==='freigegeben') {
-        $teillieferungen = '<option value="teillieferung">Teilauftrag erstellen</option>';
+    if (($status==='angelegt' || $status==='freigegeben')) {
+        if ($schreibschutz) {
+            $teillieferungen = '<option>Teilauftrag erstellen (schreibgesch&uuml;tzt)</option>';
+        } else {
+            $teillieferungen = '<option value="teillieferung">Teilauftrag erstellen</option>';
+        }        
     }
 
     if($status==='freigegeben') {
@@ -5012,17 +5017,17 @@ class Auftrag extends GenAuftrag
       )
     );
     if(!empty($anzahlteillieferungen)) {
+    
+        function auftraglink($auftrag) {
+           return "<a href=index.php?module=auftrag&action=edit&id=".$auftrag['id'].">".$auftrag['belegnr']."</a>";
+        }
+        $this->app->Tpl->AddMessage('info',"Zu diesem Auftrag geh&ouml;ren Teilauftr&auml;ge: ".implode(', ',array_map('auftraglink', $anzahlteillieferungen)), html: true);
+        
       $canzahlteillieferungen = (!empty($anzahlteillieferungen)?count($anzahlteillieferungen):0);
       for($ati=0;$ati<$canzahlteillieferungen;$ati++) {
         if($canzahlteillieferungen[$ati]['teillieferungnummer'] + 1 > $teillieferungnummermax) {
           $teillieferungnummermax = $canzahlteillieferungen[$ati]['teillieferungnummer'] + 1;
-        }
-        $this->app->Tpl->Add(
-          'MESSAGE',
-          '<div class="info">Zu diesem Auftrag geh&ouml;rt Teilauftrag Nr. <a href="index.php?module=auftrag&action=edit&id='.
-          $anzahlteillieferungen[$ati]['id'].'" target="_blank">'
-          .$anzahlteillieferungen[$ati]['belegnr'].'</a></div>'
-        );
+        }        
       }
     }
     $teillieferung_von_auftrag_nummer = $teilArr['belegnr'];
@@ -5107,7 +5112,7 @@ class Auftrag extends GenAuftrag
 
     $status= $orderRow['status'];//$this->app->DB->Select("SELECT status FROM auftrag WHERE id='$id' LIMIT 1");
     $kommissioniert = $orderRow['kommission_ok'];
-    $schreibschutz= $orderRow['schreibschutz'] || $orderRow['kommission_ok'];
+    $schreibschutz= $orderRow['schreibschutz'];
 
     $adresse= $orderRow['adresse'];//$this->app->DB->Select("SELECT adresse FROM auftrag WHERE id='$id' LIMIT 1");
     $liefersperre= $this->app->DB->Select("SELECT liefersperre FROM adresse WHERE id='$adresse' LIMIT 1");
@@ -5281,23 +5286,22 @@ class Auftrag extends GenAuftrag
       $projekt = $this->app->DB->Select("SELECT projekt from auftrag where id = '$id' LIMIT 1");
 
     if ($kommissioniert) {
-        $this->app->Tpl->AddMessage('warning',"Dieser Auftrag ist kommissioniert und darf daher nicht bearbeitet werden!");
-    } else {
-        if ($schreibschutz=='1' && $this->app->erp->RechteVorhanden('auftrag','schreibschutz')) {
-          $this->app->Tpl->Add(
-            'MESSAGE',
-            "<div class=\"warning\">Dieser Auftrag ist schreibgesch&uuml;tzt und darf daher nicht bearbeitet werden!&nbsp;<input type=\"button\" value=\"Schreibschutz entfernen\" onclick=\"if(!confirm('Soll der Schreibschutz f&uuml;r diesen Auftrag wirklich entfernt werden?')) return false;else window.location.href='index.php?module=auftrag&action=schreibschutz&id=$id';\">&nbsp;$optional</div>"
-          );
-        }
-        else {
-            if(isset($optional) && (string)$optional !== '') {
-                $this->app->Tpl->Add(
-                    'MESSAGE',
-                    "<div class=\"warning\">Zu diesem Auftrag gibt es folgende Dokumente. &nbsp;$optional</div>"
-                );
-            }
-        }
+        $this->app->Tpl->AddMessage('warning',"Dieser Auftrag ist kommissioniert und sollte nicht bearbeitet werden!");
     }
+    if ($schreibschutz=='1' && $this->app->erp->RechteVorhanden('auftrag','schreibschutz')) {
+      $this->app->Tpl->Add(
+        'MESSAGE',
+        "<div class=\"warning\">Dieser Auftrag ist schreibgesch&uuml;tzt und darf daher nicht bearbeitet werden!&nbsp;<input type=\"button\" value=\"Schreibschutz entfernen\" onclick=\"if(!confirm('Soll der Schreibschutz f&uuml;r diesen Auftrag wirklich entfernt werden?')) return false;else window.location.href='index.php?module=auftrag&action=schreibschutz&id=$id';\">&nbsp;$optional</div>"
+      );
+    }
+    else {
+        if(isset($optional) && (string)$optional !== '') {
+            $this->app->Tpl->Add(
+                'MESSAGE',
+                "<div class=\"warning\">Zu diesem Auftrag gibt es folgende Dokumente. &nbsp;$optional</div>"
+            );
+        }
+    }    
 
     if($schreibschutz=='1') {
       $this->app->erp->CommonReadonly();
@@ -7424,7 +7428,7 @@ Die Gesamtsumme stimmt nicht mehr mit urspr&uuml;nglich festgelegten Betrag '.
     $auftrag_alt = $this->app->DB->SelectArr($sql)[0];
     $msg = "";
 
-    if (in_array($auftrag_alt['status'],array('angelegt','freigegeben'))) {
+    if (in_array($auftrag_alt['status'],array('angelegt','freigegeben')) && !$auftrag_alt['schreibschutz']) {
         if ($submit != '') {
             $msg = "";
             switch ($submit) {
@@ -7504,8 +7508,7 @@ Die Gesamtsumme stimmt nicht mehr mit urspr&uuml;nglich festgelegten Betrag '.
                         }
 
                         $this->app->erp->AuftragProtokoll($id,"Teilauftrag $belegnr_neu erstellt");
-                        $this->app->erp->PDFArchivieren('auftrag', $id, true);
-
+                        $this->app->erp->AuftragEinzelnBerechnen($id,true);
                         header('Location: index.php?module=auftrag&action=edit&id='.$id_neu);
 
                     }

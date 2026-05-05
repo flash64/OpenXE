@@ -27756,6 +27756,17 @@
                     "Comment": ""
                 },
                 {
+                    "Field": "steuersatz_zielland",
+                    "Type": "int(1)",
+                    "Collation": null,
+                    "Null": "YES",
+                    "Key": "",
+                    "Default": null,
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
+                },
+                {
                     "Field": "waehrung",
                     "Type": "varchar(255)",
                     "Collation": "utf8mb3_general_ci",
