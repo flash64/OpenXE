@@ -1,13 +1,13 @@
 <?php
 /*
  **** COPYRIGHT & LICENSE NOTICE *** DO NOT REMOVE ****
- * 
+ *
  * Xentral (c) Xentral ERP Sorftware GmbH, Fuggerstrasse 11, D-86150 Augsburg, * Germany 2019
  *
- * This file is licensed under the Embedded Projects General Public License *Version 3.1. 
+ * This file is licensed under the Embedded Projects General Public License *Version 3.1.
  *
- * You should have received a copy of this license from your vendor and/or *along with this file; If not, please visit www.wawision.de/Lizenzhinweis 
- * to obtain the text of the corresponding license version.  
+ * You should have received a copy of this license from your vendor and/or *along with this file; If not, please visit www.wawision.de/Lizenzhinweis
+ * to obtain the text of the corresponding license version.
  *
  **** END OF COPYRIGHT & LICENSE NOTICE *** DO NOT REMOVE ****
  */
@@ -30,7 +30,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
   /**
    * @var $client WCClient $client
    */
-  public $client;
+  public WCClient $client;
   public $url;
 
   /** These variables hold the status strings WooCommerce is using to represent
@@ -57,7 +57,14 @@ class Shopimporter_Woocommerce extends ShopimporterBase
   protected $app;
   protected $dump;
 
-  /** @var Logger $logger */
+  /*
+   * Variables for wordpress API
+   */
+  private $ImportWordpressUserName;
+  private $ImportWordpressApplicationPassword;
+  private $wordpress_api_path = "wp-json/wp/v2/";
+
+/** @var Logger $logger */
   public $logger;
 
   public function __construct($app, $intern = false)
@@ -585,6 +592,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $return = [];
     for ($i = 0; $i < (!empty($tmp) ? count($tmp) : 0); $i++) {
       $return[$i] = new ArticleExportResult();
+      $return[$i]->success = true;
       $artikel = $tmp[$i]['artikel'];
       $return[$i]->articleId = intval($artikel);
       $nummer = $tmp[$i]['nummer'];
@@ -740,17 +748,94 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         $this->logger->info("WooCommerce neuer Artikel angelegt: $nummer");
       }
 
-      // TODO: Kategoriebaum und Bilder werden noch nicht uebertragen
+      // TODO: Kategoriebaum wird noch nicht uebertragen
 
       // if(isset($tmp[$i]['kompletter_kategorienbaum'])){
       //   $baum = $tmp[$i]['kompletter_kategorienbaum'];
       //   $this->updateKategorieBaum($baum);
       // }
 
-      // if(isset($tmp[$i]['Dateien'])){
-      //   $dateien = $tmp[$i]['Dateien'];
-      //   $this->save_images($dateien, $product_id);
-      // }
+      if(isset($tmp[$i]['Dateien'])){
+        $dateien = $tmp[$i]['Dateien'];
+
+        foreach ($dateien as $datei) {
+            $postdata = base64_decode($datei['datei']);
+
+            $result = $this->wordpress_request(
+                    endpoint: 'media',
+                    getdata: [
+                        'search' => urlencode($datei['filename'])
+                    ],
+                    debug: true,
+                    ssl_ignore: true
+            );
+
+            if ($result['status'] == 1) {
+                $response = $result['response'];
+
+                $file_wordpress_id = $response[0]['id'];
+
+                if (is_numeric($file_wordpress_id)) { // File exists -> update
+
+                    $result = $this->wordpress_request(
+                       endpoint: 'media/'.$file_wordpress_id,
+                       postdata: $postdata,
+                       method: 'POST',
+                       content_disposition: 'attachment; filename="' . $datei['filename'] . '"',
+                       content_type: $datei['mimetype']?:'application:octet-stream',
+                       debug: true,
+                       ssl_ignore: true
+                    );
+
+                    $response = $result['response'];
+
+                    if ($result['status'] != 1 || $response['id'] != $file_wordpress_id) {
+                        $return[$i]->success = false;
+                        $message = "Datei wurde nicht aktualisiert: ".$datei['filename']." ".$response['message'];
+                        $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
+                        $this->logger->error("WooCommerce ".$message);
+                    } else {
+                        $message = "Datei wurde aktualisiert: ".$datei['filename'];
+                        $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
+                        $this->logger->info("WooCommerce ".$message);
+                    }
+                } else { // New file
+                   $result = $this->wordpress_request(
+                       endpoint: 'media',
+                       postdata: $postdata,
+                       method: 'POST',
+                       content_disposition: 'attachment; filename="' . $datei['filename'] . '"',
+                       content_type: $datei['mimetype']?:'application:octet-stream',
+                       debug: true,
+                       ssl_ignore: true
+                   );
+                   if ($result['http_code'] != 201) {
+                       $return[$i]->success = false;
+                       $message = "Datei wurde nicht angelegt: ".$datei['filename'];
+                       $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
+                       $this->logger->error("WooCommerce ".$message);
+                   } else {
+                        $message = "Datei wurde angelegt: ".$datei['filename'];
+                        $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
+                        $this->logger->info("WooCommerce ".$message);
+                   }
+               }
+            } else {
+                $message = "Fehler beim Medienzugriff: ".$datei['filename'];
+                $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
+                $this->logger->info("WooCommerce ".$message);
+            }
+
+            $this->logger->debug(
+                    'WooCommerce send file',
+                        [
+                            'filename' => $datei['filename'],
+                            'ct' => mime_content_type($datei['filename']),
+                            'result' => $result
+                        ]
+                    );
+        }
+      }
 
       // Update the associated product categories
 
@@ -823,8 +908,6 @@ class Shopimporter_Woocommerce extends ShopimporterBase
           }
         }
       }
-
-      $return[$i]->success = true;
     }
 
     return $return;
@@ -840,10 +923,17 @@ class Shopimporter_Woocommerce extends ShopimporterBase
   {
     try {
       $orders = $this->client->get('orders', ['per_page' => '1']);
-      return 'success';
     } catch (Exception $e) {
       return 'failed: Keine Verbindung zur API - ' . $e->getMessage();
     }
+
+    if (!empty($this->ImportWordpressUserName)) {
+        $result = $this->wordpress_request('users/me', debug: true, ssl_ignore: true);
+        if ($result['status'] != 1) {
+            return 'failed: Verbindung zur Wordpress API '.$result['message'];
+        }
+    }
+    return 'success';
   }
 
   /**
@@ -871,6 +961,9 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $ImportWooCommerceApiSecret = $felder['ImportWoocommerceApiSecret'] ?? '';
     $ImportWooCommerceApiKey = $felder['ImportWoocommerceApiKey'] ?? '';
     $ImportWooCommerceApiUrl = $felder['ImportWoocommerceApiUrl'] ?? '';
+
+    $this->ImportWordpressUserName = $felder['ImportWordpressUserName'];
+    $this->ImportWordpressApplicationPassword = $felder['ImportWordpressApplicationPassword'];
 
     $this->statusPending = $felder['statusPending'] ?? 'pending';
     $this->statusProcessing = $felder['statusProcessing'] ?? 'processing';
@@ -1040,6 +1133,8 @@ class Shopimporter_Woocommerce extends ShopimporterBase
           'ImportWoocommerceApiKey' => array('typ' => 'text', 'bezeichnung' => '{|API Key:', 'size' => 60),
           'ImportWoocommerceApiSecret' => array('typ' => 'text', 'bezeichnung' => '{|API Secret|}:', 'size' => 60),
           'ImportWoocommerceApiUrl' => array('typ' => 'text', 'bezeichnung' => '{|API Url|}:', 'size' => 40),
+          'ImportWordpressUserName' => array('typ' => 'text', 'bezeichnung' => '{|Wordpress Benutzername:', 'size' => 60, 'info' => 'Für Dateiuploads'),
+          'ImportWordpressApplicationPassword' => array('typ' => 'text', 'bezeichnung' => '{|Wordpress Anwendungspasswort:', 'size' => 60, 'info' => 'Für Dateiuploads'),
           'statusPending' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung offen|}:', 'size' => 40, 'default' => 'pending', 'info' => '({|ggfs. getrennt durch ";": pending;on-hold|})'),
           'statusProcessing' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung in Bearbeitung|}:', 'size' => 10, 'default' => 'processing'),
           'statusCompleted' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung fertig|}:', 'size' => 10, 'default' => 'completed'),
@@ -1079,7 +1174,77 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     return (strlen(trim($string)) == 0);
   }
 
+  function wordpress_request(string $endpoint, $postdata = null, $method = null, $getdata = null, string $content_disposition = null, string $content_type = null, $debug = false, $debugurl = null, bool $ssl_ignore = false) {
+    $ch = curl_init();
+    $url_addition = "";
+
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    curl_setopt($ch, CURLOPT_USERPWD, $this->ImportWordpressUserName . ":" . $this->ImportWordpressApplicationPassword);
+
+    if (!empty($getdata)) {
+        $url_addition = "?";
+        $ampersand = "";
+        foreach ($getdata as $key => $value) {
+            $url_addition .= $ampersand . $key . "=" . $value;
+            $ampersand = "&";
+        }
+    }
+    if (!empty($postdata)) {
+        curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, $postdata);
+        $headers[] = 'Content-Type: ' . $content_type;
+        if (!empty($content_disposition)) {
+            $headers[] = 'Content-Disposition: '.$content_disposition;
+        }
+        curl_setopt($ch, CURLOPT_HTTPHEADER, $headers);
+    }
+
+    if ($debugurl) {
+        $url = $debugurl;
+    } else {
+        $url = $this->shopUrl;
+    }
+
+    curl_setopt($ch, CURLOPT_URL, $url . $this->url. $this->wordpress_api_path . $endpoint . $url_addition);
+
+    curl_setopt($ch, CURLINFO_HEADER_OUT, true);
+    curl_setopt($ch, CURLOPT_VERBOSE, true);
+
+    curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, !$ssl_ignore);
+    curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, !$ssl_ignore);
+
+    $response = curl_exec($ch);
+    if (curl_error($ch)) {
+        $this->error[] = curl_error($ch);
+    } else {
+        $response = json_decode($response, associative: true);
+    }
+    curl_close($ch);
+
+    $information = curl_getinfo($ch);
+
+    $result = [
+        'status' => ($information['http_code'] >= 200  && $information['http_code'] <= 299),
+        'response' => $response,
+        'message' => $response['message']
+    ];
+
+    if ($debug) {
+        $result['curl_getinfo'] = $information;
+        $result['curl_postdata'] = $postdata;
+        $this->logger->debug(
+                'Woocommerce Wordpress debug',
+                $result
+        );
+    }
+
+    return $result;
+  }
+
 }
+
+
 
 class WCClient
 {
@@ -2183,10 +2348,38 @@ class WCHttpClient
       return strlen($headers);
     });
 
+    $this->curl_debug = true;
+    if ($this->curl_debug) {
+        // Verbose debugging
+        ob_start();
+        $out = fopen('php://output', 'w');
+        curl_setopt($this->ch, CURLOPT_VERBOSE, true);
+        curl_setopt($this->ch, CURLOPT_STDERR, $out);
+        // Verbose debugging
+    }
+
     // Get response data.
     $body = curl_exec($this->ch);
     $code = curl_getinfo($this->ch, CURLINFO_HTTP_CODE);
     $headers = $this->getResponseHeaders();
+
+    if ($this->curl_debug) {
+        // Verbose debugging
+        fclose($out);
+        $debug = ob_get_clean();
+        $result['postdata'] = $postdata;
+        $result['debug'] = $debug;
+        // Verbose debugging
+
+        $this->logger->debug(
+        'WooCommerce debug',
+        [
+          'request' => $this->request,
+          'response' => $this->response,
+          'result' => $result
+        ]
+      );
+    }
 
     // Register response.
     $this->response = new WCResponse($code, $headers, $body);
