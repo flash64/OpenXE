@@ -708,6 +708,25 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         $commonProductAtts['stock_quantity'] = (int) $lageranzahl;
       }
 
+      if (isset($tmp[$i]['Dateien'])) {
+        $dateien = $this->uploadFiles($tmp[$i]['Dateien']);
+        if (!empty($dateien)) {
+            foreach ($dateien as $datei) {
+                if ($datei['success']) {
+                    switch ($datei['type']) {
+                        case 'shopbild':
+                            $commonProductAtts['images'][] = [
+                                'src' => $datei['url']
+                            ];
+                            break;
+                    }
+                } else {
+                    $return[$i]->message .= "Datei wurde nicht exportiert: ".$datei['name'];
+                }
+            }
+        }
+      }
+
       if (!is_null($product_id)) {
         // Product exists - check if it's a variation or regular product
         if ($isVariant && !empty($parent_id)) {
@@ -754,88 +773,6 @@ class Shopimporter_Woocommerce extends ShopimporterBase
       //   $baum = $tmp[$i]['kompletter_kategorienbaum'];
       //   $this->updateKategorieBaum($baum);
       // }
-
-      if(isset($tmp[$i]['Dateien'])){
-        $dateien = $tmp[$i]['Dateien'];
-
-        foreach ($dateien as $datei) {
-            $postdata = base64_decode($datei['datei']);
-
-            $result = $this->wordpress_request(
-                    endpoint: 'media',
-                    getdata: [
-                        'search' => urlencode($datei['filename'])
-                    ],
-                    debug: true,
-                    ssl_ignore: true
-            );
-
-            if ($result['status'] == 1) {
-                $response = $result['response'];
-
-                $file_wordpress_id = $response[0]['id'];
-
-                if (is_numeric($file_wordpress_id)) { // File exists -> update
-
-                    $result = $this->wordpress_request(
-                       endpoint: 'media/'.$file_wordpress_id,
-                       postdata: $postdata,
-                       method: 'POST',
-                       content_disposition: 'attachment; filename="' . $datei['filename'] . '"',
-                       content_type: $datei['mimetype']?:'application:octet-stream',
-                       debug: true,
-                       ssl_ignore: true
-                    );
-
-                    $response = $result['response'];
-
-                    if ($result['status'] != 1 || $response['id'] != $file_wordpress_id) {
-                        $return[$i]->success = false;
-                        $message = "Datei wurde nicht aktualisiert: ".$datei['filename']." ".$response['message'];
-                        $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
-                        $this->logger->error("WooCommerce ".$message);
-                    } else {
-                        $message = "Datei wurde aktualisiert: ".$datei['filename'];
-                        $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
-                        $this->logger->info("WooCommerce ".$message);
-                    }
-                } else { // New file
-                   $result = $this->wordpress_request(
-                       endpoint: 'media',
-                       postdata: $postdata,
-                       method: 'POST',
-                       content_disposition: 'attachment; filename="' . $datei['filename'] . '"',
-                       content_type: $datei['mimetype']?:'application:octet-stream',
-                       debug: true,
-                       ssl_ignore: true
-                   );
-                   if ($result['http_code'] != 201) {
-                       $return[$i]->success = false;
-                       $message = "Datei wurde nicht angelegt: ".$datei['filename'];
-                       $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
-                       $this->logger->error("WooCommerce ".$message);
-                   } else {
-                        $message = "Datei wurde angelegt: ".$datei['filename'];
-                        $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
-                        $this->logger->info("WooCommerce ".$message);
-                   }
-               }
-            } else {
-                $message = "Fehler beim Medienzugriff: ".$datei['filename'];
-                $return[$i]->message .= $return[$i]->message?(', '.$message):$message;
-                $this->logger->info("WooCommerce ".$message);
-            }
-
-            $this->logger->debug(
-                    'WooCommerce send file',
-                        [
-                            'filename' => $datei['filename'],
-                            'ct' => mime_content_type($datei['filename']),
-                            'result' => $result
-                        ]
-                    );
-        }
-      }
 
       // Update the associated product categories
 
@@ -1242,8 +1179,93 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     return $result;
   }
 
-}
+      /*
+     * Upload files to wordpress API
+     * Returns list of files with url
+     */
 
+    function uploadFiles($dateien) {
+
+        $uploadFilesResult = array();
+
+        foreach ($dateien as $datei) {
+
+            $fileResult = [
+                            'success' => true,
+                            'name'=> $datei['filename'],
+                            'type' => strtolower($datei['stichwort'])
+                        ];
+
+            $postdata = base64_decode($datei['datei']);
+
+            $result = $this->wordpress_request(
+                    endpoint: 'media',
+                    getdata: [
+                        'search' => urlencode($datei['filename'])
+                    ],
+                    debug: true,
+                    ssl_ignore: true
+            );
+
+            if ($result['status'] == 1) {
+                $response = $result['response'];
+
+                $file_wordpress_id = $response[0]['id'];
+
+                if (is_numeric($file_wordpress_id)) { // File exists -> update
+                    $result = $this->wordpress_request(
+                            endpoint: 'media/' . $file_wordpress_id,
+                            postdata: $postdata,
+                            method: 'POST',
+                            content_disposition: 'attachment; filename="' . $datei['filename'] . '"',
+                            content_type: $datei['mimetype'] ?: 'application:octet-stream',
+                            debug: true,
+                            ssl_ignore: true
+                    );
+
+                    $response = $result['response'];
+
+                    if ($result['status'] != 1 || $response['id'] != $file_wordpress_id) {
+                        $fileResult['success'] = false;
+                        $fileResult['status'] = 'file update failed';
+                    } else {
+                        $fileResult['status'] = 'updated';
+                        $fileResult['id'] = $response['id'];
+                        $fileResult['url'] = $response['guid']['rendered'];
+                    }
+                } else { // New file
+                    $result = $this->wordpress_request(
+                            endpoint: 'media',
+                            postdata: $postdata,
+                            method: 'POST',
+                            content_disposition: 'attachment; filename="' . $datei['filename'] . '"',
+                            content_type: $datei['mimetype'] ?: 'application:octet-stream',
+                            debug: true,
+                            ssl_ignore: true
+                    );
+                    if ($result['http_code'] != 201) {
+                        $fileResult['success'] = false;
+                        $fileResult['status'] = 'file creation failed';
+                    } else {
+                        $fileResult['status'] = 'created';
+                        $fileResult['id'] = $response['id'];
+                        $fileResult['url'] = $response['guid']['rendered'];
+                    }
+                }
+            } else {
+                $fileResult['success'] = false;
+                $fileResult['status'] = 'media search failed';
+            }
+            $uploadFilesResult[] = $fileResult;
+        }
+        $this->logger->debug(
+                'WooCommerce upload files',
+                $uploadFilesResult
+        );
+
+        return($uploadFilesResult);
+    }
+}
 
 
 class WCClient
