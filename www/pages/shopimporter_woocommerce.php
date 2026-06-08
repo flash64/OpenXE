@@ -63,6 +63,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
   private $ImportWordpressUserName;
   private $ImportWordpressApplicationPassword;
   private $wordpress_api_path = "wp-json/wp/v2/";
+  private $dateienuebertragen;
 
 /** @var Logger $logger */
   public $logger;
@@ -636,7 +637,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
       $meta_desc = $tmp[$i]['metadescription_de'];
       $meta_title = $tmp[$i]['metatitle_de'];
 
-      $pseudopreis = $tmp[$i]['pseudopreis'];//*1.19;
+      $pseudopreis = $tmp[$i]['pseudopreis'];// *1.19;
       if ($pseudopreis <= $preis)
         $pseudopreis = $preis;
       $steuersatz = $tmp[$i]['steuersatz'];
@@ -711,18 +712,23 @@ class Shopimporter_Woocommerce extends ShopimporterBase
       if (isset($tmp[$i]['Dateien'])) {
         $dateien = $this->uploadFiles($tmp[$i]['Dateien']);
         if (!empty($dateien)) {
+            $attachments = array();
             foreach ($dateien as $datei) {
                 if ($datei['success']) {
-                    switch ($datei['type']) {
-                        case 'shopbild':
-                            $commonProductAtts['images'][] = [
-                                'src' => $datei['url']
-                            ];
-                            break;
+                    if ($datei['type'] == 'shopbild') {
+                        $commonProductAtts['images'][] = [
+                            'src' => $datei['url']
+                        ];
+                    }
+                    else if (in_array(strtolower($datei['type']),$this->dateienuebertragen)) {
+                        $attachments[] = array('name' => $datei['name'], 'wp_media_id' => $datei['id'], 'typ' => $datei['type']);
                     }
                 } else {
                     $return[$i]->message .= "Datei wurde nicht exportiert: ".$datei['name'];
                 }
+            }
+            if (!empty($attachments)) {
+                $commonProductAtts['meta_data'][] = array('key' => 'openxe_product_attachments', 'value' => $attachments);
             }
         }
       }
@@ -902,6 +908,9 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $this->ImportWordpressUserName = $felder['ImportWordpressUserName'];
     $this->ImportWordpressApplicationPassword = $felder['ImportWordpressApplicationPassword'];
 
+    $dateienuebertragen =  $this->app->DB->Select("SELECT dateienuebertragen FROM shopexport WHERE id = '$this->shopid' LIMIT 1");
+    $this->dateienuebertragen = explode(',',str_replace(' ','',strtolower($dateienuebertragen)));
+
     $this->statusPending = $felder['statusPending'] ?? 'pending';
     $this->statusProcessing = $felder['statusProcessing'] ?? 'processing';
     $this->statusCompleted = $felder['statusCompleted'] ?? 'completed';
@@ -1076,6 +1085,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
           'statusProcessing' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung in Bearbeitung|}:', 'size' => 10, 'default' => 'processing'),
           'statusCompleted' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung fertig|}:', 'size' => 10, 'default' => 'completed'),
           'priceType' => array('typ' => 'select', 'bezeichnung' => '{|Preisberechnungsgrundlage bei Auftragsimport|}', 'optionen' => array('netcalculated' => '{|Nettopreis zurückrechnen (Standard)|}', 'grosscalculated' => '{|Bruttopreis zurückrechnen|}')),
+          'dateienuebertragen' => array('typ' => 'info', 'bezeichnung' => '{|Datei&uuml;bertragung|}', 'info' => 'Dateien werden &uuml;ber Wordpress API hochgeladen und im Produkt in den Metadaten als Array "openxe_product_attachments" hinterlegt. Diese k&ouml;nnen dann z.B. mit einem Snippet angezeigt werden. Felder: "typ", "wp_media_id", "name". Der URL kann mit wp_get_attachment_url($wp_media_id) ermittelt werden.'),
         )
       );
   }
