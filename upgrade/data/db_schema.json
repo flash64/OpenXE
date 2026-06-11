@@ -37712,7 +37712,7 @@
                 },
                 {
                     "Field": "signatur",
-                    "Type": "text",
+                    "Type": "mediumtext",
                     "Collation": "utf8mb3_general_ci",
                     "Null": "NO",
                     "Key": "",
@@ -40004,7 +40004,7 @@
                 },
                 {
                     "Field": "signatur",
-                    "Type": "text",
+                    "Type": "mediumtext",
                     "Collation": "utf8mb3_general_ci",
                     "Null": "NO",
                     "Key": "",
@@ -41071,7 +41071,7 @@
                 },
                 {
                     "Field": "email_html_template",
-                    "Type": "text",
+                    "Type": "mediumtext",
                     "Collation": "utf8mb3_general_ci",
                     "Null": "NO",
                     "Key": "",
@@ -79792,7 +79792,7 @@
                 },
                 {
                     "Field": "email_html_template",
-                    "Type": "text",
+                    "Type": "mediumtext",
                     "Collation": "utf8mb3_general_ci",
                     "Null": "YES",
                     "Key": "",
@@ -93170,6 +93170,17 @@
                     "Field": "shopbilderuebertragen",
                     "Type": "tinyint(1)",
                     "Collation": null,
+                    "Null": "NO",
+                    "Key": "",
+                    "Default": "0",
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
+                },
+                {
+                    "Field": "dateienuebertragen",
+                    "Type": "varchar(128)",
+                    "Collation": "utf8mb3_general_ci",
                     "Null": "NO",
                     "Key": "",
                     "Default": "0",
