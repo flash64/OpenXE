@@ -724,7 +724,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                         $attachments[] = array('name' => $datei['name'], 'wp_media_id' => $datei['id'], 'typ' => $datei['type']);
                     }
                 } else {
-                    $return[$i]->message .= "Datei wurde nicht exportiert: ".$datei['name'];
+                    $return[$i]->message .= "Datei wurde nicht exportiert: ".$datei['name']." (".$datei['status'].") ";
                 }
             }
             if (!empty($attachments)) {
@@ -852,7 +852,6 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         }
       }
     }
-
     return $return;
     // return array($product_id,$anzahl,$nummer,$steuersatz, $preis);
   }
