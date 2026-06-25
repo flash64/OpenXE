@@ -4000,6 +4000,28 @@
                     "Extra": "",
                     "Privileges": "select,insert,update,references",
                     "Comment": ""
+                },
+                {
+                    "Field": "email",
+                    "Type": "varchar(255)",
+                    "Collation": "utf8mb3_general_ci",
+                    "Null": "NO",
+                    "Key": "MUL",
+                    "Default": null,
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
+                },
+                {
+                    "Field": "notiz",
+                    "Type": "varchar(255)",
+                    "Collation": "utf8mb3_general_ci",
+                    "Null": "NO",
+                    "Key": "",
+                    "Default": null,
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
                 }
             ],
             "keys": [
@@ -31522,6 +31544,17 @@
                 },
                 {
                     "Field": "beschriftung",
+                    "Type": "varchar(128)",
+                    "Collation": "utf8mb3_general_ci",
+                    "Null": "NO",
+                    "Key": "",
+                    "Default": null,
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
+                },
+                {
+                    "Field": "kennung",
                     "Type": "varchar(128)",
                     "Collation": "utf8mb3_general_ci",
                     "Null": "NO",
@@ -93183,7 +93216,7 @@
                     "Collation": "utf8mb3_general_ci",
                     "Null": "NO",
                     "Key": "",
-                    "Default": "0",
+                    "Default": "'0'",
                     "Extra": "",
                     "Privileges": "select,insert,update,references",
                     "Comment": ""
