@@ -37115,13 +37115,16 @@ function Firmendaten($field,$projekt="")
 
       function AddDateiStichwort($id,$subjekt,$objekt,$parameter,$without_log=false,$parameter2=0,$objekt2='')
       {
-        $typen = $this->getDateiTypen(strtolower($objekt));
-        if (!in_array(strtolower($subjekt),array_keys($typen))) {
-            throw new Exception("Unbekanntes Stichwort ".$subjekt);
+        if (empty($objekt) || empty($parameter)) {
+            throw new Exception("Leere Objektangabe Objekt ".$objekt." Parameter ".$parameter);
         }
         $datei_objekt = $this->getDateiObjekt(strtolower($objekt), $parameter, 'id');
         if (empty($datei_objekt)) {
             throw new Exception("Unbekanntes Objekt ".$objekt." ".$parameter);
+        }
+        $typen = $this->getDateiTypen(strtolower($objekt));
+        if (!in_array(strtolower($subjekt),array_keys($typen))) {
+            throw new Exception("Unbekanntes Stichwort ".$subjekt." für ".$objekt);
         }
         if(strtolower($objekt) === 'artikel' && $parameter) {
           $this->app->DB->Update("UPDATE artikel SET bildvorschau = '' WHERE id = '".$parameter."' LIMIT 1");
@@ -37575,17 +37578,28 @@ function Firmendaten($field,$projekt="")
             $dateiTypen['belege'] = ['wert' => 'Belege', 'beschriftung' => 'Beleg'];
             $dateiTypen['quittung'] = ['wert' => 'Quittung', 'beschriftung' => 'Quittung'];
             break;
+          case 'versandpaket':
+            $dateiTypen['paketschein'] = ['wert' => 'paketschein', 'beschriftung' => 'Paketschein'];
+            $dateiTypen['paketmarke'] = ['wert' => 'paketmarke', 'beschriftung' => 'Paketmarke'];
+            break;
+          case 'adresse':
+            $dateiTypen['profilbild'] = ['wert' => 'Profilbild', 'beschriftung' => 'Profilbild'];
+            break;
         }
 
         $dateiTypen['sonstige'] = ['wert' => 'Sonstige', 'beschriftung' => 'Sonstige Datei'];
         $dateiTypen['deckblatt'] = ['wert' => 'Deckblatt', 'beschriftung' => 'Deckblatt'];
-        $dateiTypen['anhang'] = ['wert' => 'anhang', 'beschriftung' => 'Anhang'];
+        $dateiTypen['anhang'] = ['wert' => 'Anhang', 'beschriftung' => 'Anhang'];
 
-        //adresse unter defaulttypen, da profilbild nicht als default ausgewählt werden soll OS148717
-        switch($modul){
-          case 'adresse':
-            $dateiTypen['profilbild'] = ['wert' => 'Profilbild', 'beschriftung' => 'Profilbild'];
-            break;
+        /*These need to be checked, possible legacy */
+        $dateiTypen['dokument'] = ['wert' => 'Dokument', 'beschriftung' => 'Dokument'];
+        $dateiTypen['anschreiben'] = ['wert' => 'Anschreiben', 'beschriftung' => 'Anschreiben'];
+        $dateiTypen['belege'] = ['wert' => 'Belege', 'beschriftung' => 'Belege'];
+        $dateiTypen['kontoauszug'] = ['wert' => 'Kontoauszug', 'beschriftung' => 'Kontoauszug'];
+        $dateiTypen['mahnung'] = ['wert' => 'Mahnung', 'beschriftung' => 'Mahnung'];
+
+        if (!empty($modul)) {
+            $dateiTypen[$modul] = ['wert' => $modul, 'beschriftung' => 'Beleg '.ucfirst($modul)];
         }
 
         if($modul !== ''){
@@ -37627,9 +37641,10 @@ function Firmendaten($field,$projekt="")
                 'aufgaben'=> ['wert' => 'aufgaben','tabelle' => 'aufgaben', 'suchfelder' => ['id']],
                 'konto'=> ['wert' => 'konto','tabelle' => 'konto', 'suchfelder' => ['id']],
                 'retoure'=> ['wert' => 'retoure','tabelle' => 'retoure', 'suchfelder' => ['belegnr']],
-                'ticket_header'=> ['wert' => 'ticket_header','tabelle' => 'ticket_header', 'suchfelder' => ['id']],
+                'ticket_header'=> ['wert' => 'ticket_header','tabelle' => 'ticket', 'suchfelder' => ['id']],
+                'ticket'=> ['wert' => 'Ticket','tabelle' => 'ticket_nachricht', 'suchfelder' => ['id']],
                 'lieferantengutschrift'=> ['wert' => 'lieferantengutschrift','tabelle' => 'lieferantengutschrift', 'suchfelder' => ['belegnr', 'rechnung']],
-                'versandpaket'=> ['wert' => 'versandpaket','tabelle' => 'versandpaket', 'suchfelder' => ['id']],            );
+                'versandpaket'=> ['wert' => 'versandpaket','tabelle' => 'versandpakete', 'suchfelder' => ['id']],            );
         }
 
      function getDateiObjekt(string $objekt, string $objektnummer, string $suchfeld = '') {
