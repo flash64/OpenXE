@@ -591,6 +591,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $tmp = $this->catchRemoteCommand('data');
     $anzahl = 0;
     $return = [];
+
     for ($i = 0; $i < (!empty($tmp) ? count($tmp) : 0); $i++) {
       $return[$i] = new ArticleExportResult();
       $return[$i]->success = true;
@@ -607,8 +608,25 @@ class Shopimporter_Woocommerce extends ShopimporterBase
       $hersteller = $tmp[$i]['hersteller'];
       $herstellerlink = $tmp[$i]['herstellerlink'];
 
-      $name_de = $tmp[$i]['name_de'];
-      $name_en = $tmp[$i]['name_en'];
+      $name_de = html_entity_decode($tmp[$i]['name_de']);
+      $name_en = html_entity_decode($tmp[$i]['name_en']);
+
+        $artikeldata = $tmp[$i];
+        unset($artikeldata['Dateien']);
+
+        if (!empty($this->productnamesmarty)) {
+            $smarty = new Smarty;
+            $directory = $this->app->erp->GetTMP().'/smarty/templates';
+            $smarty->setCompileDir($directory);
+            $smarty->assign('artikel', (object) $artikeldata);
+            $transformed = $smarty->fetch('string:'.$this->productnamesmarty);
+            if (!empty($transformed)) {
+                $name_de = $transformed;
+            }
+        }
+
+//        print_r($tmp[$i]); exit();
+
       $description = html_entity_decode($tmp[$i]['uebersicht_de']);
       $description_en = html_entity_decode($tmp[$i]['uebersicht_en']);
       $preis = $tmp[$i]['preis'];
@@ -691,6 +709,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
           'width' => $dim_width,
           'height' => $dim_height
         ],
+        'global_unique_id' => $tmp[$i]['ean'],
         'meta_data' => $commonMetaData,
       ];
 
@@ -710,6 +729,49 @@ class Shopimporter_Woocommerce extends ShopimporterBase
       }
 
       if (isset($tmp[$i]['Dateien'])) {
+        // apply naming
+
+//        echo("Dateien:<br>");
+
+        foreach ($tmp[$i]['Dateien'] as $key => $datei) {
+            if (!empty($this->filenamesmarty)) {
+                $smarty = new Smarty;
+                $directory = $this->app->erp->GetTMP().'/smarty/templates';
+                $smarty->setCompileDir($directory);
+                $dateidata = $datei;
+                unset($dateidata['datei']);
+                $dateidata['dateiname'] = pathinfo($dateidata['filename'] , PATHINFO_FILENAME);
+                $dateidata['endung'] = pathinfo($dateidata['filename'], PATHINFO_EXTENSION);
+                $dateidata['artikel'] = (object) $datei['artikeldata'];
+                $smarty->assign('artikel', (object) $artikeldata);
+                $smarty->assign('datei', (object) $dateidata);
+                $transformed = $smarty->fetch('string:'.$this->filenamesmarty);
+                if (!empty($transformed)) {
+                    $basename = pathinfo($transformed, PATHINFO_FILENAME);
+                    $ext = pathinfo($transformed, PATHINFO_EXTENSION);
+                    if (empty($ext)) {
+                        $ext = $datei['dateiendung'];
+                    }
+                    $datei['filename'] = $basename.".".$ext;
+                }
+            }
+            // Ensure unique names
+            if (in_array($datei['filename'],array_column($tmp[$i]['Dateien'],'filename'))) {
+                $filecount = 0;
+                $base = pathinfo($datei['filename'], PATHINFO_FILENAME);
+                $extension = pathinfo($datei['filename'], PATHINFO_EXTENSION);
+                do {
+                    $filecount++;
+                    $filename = $base.$this->fileunique.$filecount.'.'.$extension;
+                } while (in_array($filename,array_column($tmp[$i]['Dateien'],'filename')));
+                $datei['filename'] = $filename;
+            }
+            $tmp[$i]['Dateien'][$key]['filename'] = $datei['filename'];
+  //          echo($tmp[$i]['Dateien'][$key]['filename']."<br>");
+        }
+
+//        exit();
+
         $dateien = $this->uploadFiles($tmp[$i]['Dateien']);
         if (!empty($dateien)) {
             $attachments = array();
@@ -907,6 +969,10 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $this->ImportWordpressUserName = $felder['ImportWordpressUserName'];
     $this->ImportWordpressApplicationPassword = $felder['ImportWordpressApplicationPassword'];
 
+    $this->filenamesmarty = $felder['filenamesmarty'];
+    $this->productnamesmarty = $felder['productnamesmarty'];
+    $this->fileunique = $felder['fileunique'];
+
     $dateienuebertragen =  $this->app->DB->Select("SELECT dateienuebertragen FROM shopexport WHERE id = '$this->shopid' LIMIT 1");
     $this->dateienuebertragen = explode(',',str_replace(' ','',strtolower($dateienuebertragen)));
 
@@ -1073,18 +1139,35 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         'ausblenden' => array('abholmodus' => array('zeitbereich')),
         'archiv' => array('ab_nummer'),
         'felder' => array(
-          //          'protokoll'=>array('typ'=>'checkbox','bezeichnung'=>'Protokollierung im Logfile:'),
-          'ssl_ignore' => array('typ' => 'checkbox', 'bezeichnung' => 'SSL-Prüfung abschalten:', 'info' => 'Nur für Testzwecke!'),
-          'ImportWoocommerceApiKey' => array('typ' => 'text', 'bezeichnung' => '{|API Key:', 'size' => 60),
-          'ImportWoocommerceApiSecret' => array('typ' => 'text', 'bezeichnung' => '{|API Secret|}:', 'size' => 60),
-          'ImportWoocommerceApiUrl' => array('typ' => 'text', 'bezeichnung' => '{|API Url|}:', 'size' => 40),
-          'ImportWordpressUserName' => array('typ' => 'text', 'bezeichnung' => '{|Wordpress Benutzername:', 'size' => 60, 'info' => 'Für Dateiuploads'),
-          'ImportWordpressApplicationPassword' => array('typ' => 'text', 'bezeichnung' => '{|Wordpress Anwendungspasswort:', 'size' => 60, 'info' => 'Für Dateiuploads'),
-          'statusPending' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung offen|}:', 'size' => 40, 'default' => 'pending', 'info' => '({|ggfs. getrennt durch ";": pending;on-hold|})'),
-          'statusProcessing' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung in Bearbeitung|}:', 'size' => 10, 'default' => 'processing'),
-          'statusCompleted' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung fertig|}:', 'size' => 10, 'default' => 'completed'),
-          'priceType' => array('typ' => 'select', 'bezeichnung' => '{|Preisberechnungsgrundlage bei Auftragsimport|}', 'optionen' => array('netcalculated' => '{|Nettopreis zurückrechnen (Standard)|}', 'grosscalculated' => '{|Bruttopreis zurückrechnen|}')),
-          'dateienuebertragen' => array('typ' => 'info', 'bezeichnung' => '{|Datei&uuml;bertragung|}', 'info' => 'Dateien werden &uuml;ber Wordpress API hochgeladen und im Produkt in den Metadaten als Array "openxe_product_attachments" hinterlegt. Diese k&ouml;nnen dann z.B. mit einem Snippet angezeigt werden. Felder: "typ", "wp_media_id", "name". Der URL kann mit wp_get_attachment_url($wp_media_id) ermittelt werden.'),
+        //          'protokoll'=>array('typ'=>'checkbox','bezeichnung'=>'Protokollierung im Logfile:'),
+        'ssl_ignore' => array('typ' => 'checkbox', 'bezeichnung' => 'SSL-Prüfung abschalten:', 'info' => 'Nur für Testzwecke!'),
+        'ImportWoocommerceApiKey' => array('typ' => 'text', 'bezeichnung' => '{|API Key:', 'size' => 60),
+        'ImportWoocommerceApiSecret' => array('typ' => 'text', 'bezeichnung' => '{|API Secret|}:', 'size' => 60),
+        'ImportWoocommerceApiUrl' => array('typ' => 'text', 'bezeichnung' => '{|API Url|}:', 'size' => 40),
+        'ImportWordpressUserName' => array('typ' => 'text', 'bezeichnung' => '{|Wordpress Benutzername:', 'size' => 60, 'info' => 'Für Dateiuploads'),
+        'ImportWordpressApplicationPassword' => array('typ' => 'text', 'bezeichnung' => '{|Wordpress Anwendungspasswort:', 'size' => 60, 'info' => 'Für Dateiuploads'),
+        'statusPending' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung offen|}:', 'size' => 40, 'default' => 'pending', 'info' => '({|ggfs. getrennt durch ";": pending;on-hold|})'),
+        'statusProcessing' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung in Bearbeitung|}:', 'size' => 10, 'default' => 'processing'),
+        'statusCompleted' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung fertig|}:', 'size' => 10, 'default' => 'completed'),
+        'priceType' => array('typ' => 'select', 'bezeichnung' => '{|Preisberechnungsgrundlage bei Auftragsimport|}', 'optionen' => array('netcalculated' => '{|Nettopreis zurückrechnen (Standard)|}', 'grosscalculated' => '{|Bruttopreis zurückrechnen|}')),
+        'productnamesmarty' => [
+            'typ' => 'textarea',
+            'cols' => 80,
+            'rows' => 5,
+            'bezeichnung' => '{|Smarty-Template f&uuml;r Benennung der Produkte|}:',
+            'info' => 'Beispiel:{$artikel->hersteller}-{$artikel->herstellernummer}-{$artikel->nummer}-{$artikel->name_de}: {$artikel->anabregs_text}',
+            'size' => 120,
+        ],
+        'filenamesmarty' => [
+            'typ' => 'textarea',
+            'cols' => 80,
+            'rows' => 5,
+            'bezeichnung' => '{|Smarty-Template f&uuml;r Benennung der Dateien|}:',
+            'info' => 'Beispiel:{$artikel->hersteller}-{$artikel->herstellernummer}-{$artikel->stichwort}-{$datei->titel}.{$datei->endung}<br>Dateifelder: dateiname, endung, mimetype, titel, beschreibung, id, version, stichwort, extid',
+            'size' => 120,
+        ],
+        'fileunique' => array('typ' => 'text', 'bezeichnung' => '{|Trennzeichen für Mehrfachdateinamen|}:', 'size' => 11, 'default' => '-'),
+        'dateienuebertragen' => array('typ' => 'info', 'bezeichnung' => '{|Datei&uuml;bertragung|}', 'info' => 'Dateien werden &uuml;ber Wordpress API hochgeladen und im Produkt in den Metadaten als Array "openxe_product_attachments" hinterlegt. Diese k&ouml;nnen dann z.B. mit einem Snippet angezeigt werden. Felder: "typ", "wp_media_id", "name". Der URL kann mit wp_get_attachment_url($wp_media_id) ermittelt werden.'),
         )
       );
   }
@@ -1120,7 +1203,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     return (strlen(trim($string)) == 0);
   }
 
-  function wordpress_request(string $endpoint, $postdata = null, $method = null, $getdata = null, string $content_disposition = null, string $content_type = null, $debug = false, $debugurl = null, bool $ssl_ignore = false) {
+  function wordpress_request(string $endpoint, $postdata = null, $method = null, $getdata = null, string $content_disposition = null, string $content_type = null, $debug = false, $debugurl = null, bool $ssl_ignore = false, int $timeout_seconds = 30) {
     $ch = curl_init();
     $url_addition = "";
 
@@ -1159,6 +1242,9 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
     curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, !$ssl_ignore);
     curl_setopt($ch, CURLOPT_SSL_VERIFYHOST, !$ssl_ignore);
+
+    curl_setopt($ch, CURLOPT_CONNECTTIMEOUT, $timeout_seconds);
+    curl_setopt($ch, CURLOPT_TIMEOUT, $timeout_seconds);
 
     $response = curl_exec($ch);
     if (curl_error($ch)) {
@@ -1252,13 +1338,13 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                             debug: true,
                             ssl_ignore: true
                     );
-                    if ($result['http_code'] != 201) {
-                        $fileResult['success'] = false;
-                        $fileResult['status'] = 'file creation failed';
-                    } else {
+                    if ($result['http_code'] >= 200 && $result['http_code'] <= 299) {
                         $fileResult['status'] = 'created';
                         $fileResult['id'] = $response['id'];
                         $fileResult['url'] = $response['guid']['rendered'];
+                    } else {
+                        $fileResult['success'] = false;
+                        $fileResult['status'] = 'file creation failed: '.$result['http_code'];
                     }
                 }
             } else {
