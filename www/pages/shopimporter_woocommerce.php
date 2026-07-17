@@ -596,6 +596,20 @@ class Shopimporter_Woocommerce extends ShopimporterBase
       $return[$i] = new ArticleExportResult();
       $return[$i]->success = true;
       $artikel = $tmp[$i]['artikel'];
+
+        if (!empty($this->productsmarty)) {
+            $smarty = new Smarty;
+            $directory = $this->app->erp->GetTMP().'/smarty/templates';
+            $smarty->setCompileDir($directory);
+            $smarty->assign('artikel', (object) $tmp[$i]);
+            $smarty_array = json_decode($this->productsmarty, true);
+            if (empty($smarty_array)) {
+                throw new Exception("Smarty template JSON decode error!");
+            }
+            $transformed = json_decode($smarty->fetch('string:'.$this->productsmarty),true);
+            $tmp[$i] = array_merge((array) $tmp[$i], $transformed);
+        }
+
       $return[$i]->articleId = intval($artikel);
       $nummer = $tmp[$i]['nummer'];
       if (!empty($tmp[$i]['artikelnummer_fremdnummern'][0]['nummer'])) {
@@ -610,20 +624,6 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
       $name_de = html_entity_decode($tmp[$i]['name_de']);
       $name_en = html_entity_decode($tmp[$i]['name_en']);
-
-        $artikeldata = $tmp[$i];
-        unset($artikeldata['Dateien']);
-
-        if (!empty($this->productnamesmarty)) {
-            $smarty = new Smarty;
-            $directory = $this->app->erp->GetTMP().'/smarty/templates';
-            $smarty->setCompileDir($directory);
-            $smarty->assign('artikel', (object) $artikeldata);
-            $transformed = $smarty->fetch('string:'.$this->productnamesmarty);
-            if (!empty($transformed)) {
-                $name_de = $transformed;
-            }
-        }
 
 //        print_r($tmp[$i]); exit();
 
@@ -694,6 +694,9 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         ['key' => '_yoast_wpseo_title', 'value' => $meta_title],
       ];
 
+        foreach ($tmp[$i]['meta_data'] as $key => $value) {
+            $commonMetaData[] = ['key' => $this->metadataprefix.$key, 'value' => $value];
+        }
 
       // Attributes that are used for both updating an existing product as well as creating a new one
       $commonProductAtts = [
@@ -728,6 +731,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         $commonProductAtts['stock_quantity'] = (int) $lageranzahl;
       }
 
+
       if (isset($tmp[$i]['Dateien'])) {
         // apply naming
 
@@ -743,7 +747,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                 $dateidata['dateiname'] = pathinfo($dateidata['filename'] , PATHINFO_FILENAME);
                 $dateidata['endung'] = pathinfo($dateidata['filename'], PATHINFO_EXTENSION);
                 $dateidata['artikel'] = (object) $datei['artikeldata'];
-                $smarty->assign('artikel', (object) $artikeldata);
+                $smarty->assign('artikel', (object) $tmp[$i]);
                 $smarty->assign('datei', (object) $dateidata);
                 $transformed = $smarty->fetch('string:'.$this->filenamesmarty);
                 if (!empty($transformed)) {
@@ -767,7 +771,8 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                 $datei['filename'] = $filename;
             }
             $tmp[$i]['Dateien'][$key]['filename'] = $datei['filename'];
-  //          echo($tmp[$i]['Dateien'][$key]['filename']."<br>");
+
+//            echo($tmp[$i]['Dateien'][$key]['filename']."<br>");
         }
 
 //        exit();
@@ -970,8 +975,9 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $this->ImportWordpressApplicationPassword = $felder['ImportWordpressApplicationPassword'];
 
     $this->filenamesmarty = $felder['filenamesmarty'];
-    $this->productnamesmarty = $felder['productnamesmarty'];
+    $this->productsmarty = $felder['productsmarty'];
     $this->fileunique = $felder['fileunique'];
+    $this->metadataprefix = $felder['metadataprefix'];
 
     $dateienuebertragen =  $this->app->DB->Select("SELECT dateienuebertragen FROM shopexport WHERE id = '$this->shopid' LIMIT 1");
     $this->dateienuebertragen = explode(',',str_replace(' ','',strtolower($dateienuebertragen)));
@@ -1150,12 +1156,13 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         'statusProcessing' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung in Bearbeitung|}:', 'size' => 10, 'default' => 'processing'),
         'statusCompleted' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung fertig|}:', 'size' => 10, 'default' => 'completed'),
         'priceType' => array('typ' => 'select', 'bezeichnung' => '{|Preisberechnungsgrundlage bei Auftragsimport|}', 'optionen' => array('netcalculated' => '{|Nettopreis zurückrechnen (Standard)|}', 'grosscalculated' => '{|Bruttopreis zurückrechnen|}')),
-        'productnamesmarty' => [
+        'metadataprefix' => array('typ' => 'text', 'bezeichnung' => '{|Präfix für Metadaten|}:', 'size' => 40, 'default' => 'openxe_meta_', 'info' => ''),
+        'productsmarty' => [
             'typ' => 'textarea',
             'cols' => 80,
             'rows' => 5,
-            'bezeichnung' => '{|Smarty-Template f&uuml;r Benennung der Produkte|}:',
-            'info' => 'Beispiel:{$artikel->hersteller}-{$artikel->herstellernummer}-{$artikel->nummer}-{$artikel->name_de}: {$artikel->anabregs_text}',
+            'bezeichnung' => '{|Smarty-Template JSON|}:',
+            'info' => 'Beispiel:<br>{<br />&nbsp; &nbsp; "name_de": "{$artikel-&gt;name_en}",<br />&nbsp; &nbsp; "meta_data": {<br />&nbsp; &nbsp; &nbsp; &nbsp; "mpn": "{$artikel-&gt;herstellernummer}",<br />&nbsp; &nbsp; &nbsp; &nbsp; "manufacturer": "{$artikel-&gt;hersteller}"<br />&nbsp; &nbsp; }<br />}',
             'size' => 120,
         ],
         'filenamesmarty' => [
@@ -1167,7 +1174,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
             'size' => 120,
         ],
         'fileunique' => array('typ' => 'text', 'bezeichnung' => '{|Trennzeichen für Mehrfachdateinamen|}:', 'size' => 11, 'default' => '-'),
-        'dateienuebertragen' => array('typ' => 'info', 'bezeichnung' => '{|Datei&uuml;bertragung|}', 'info' => 'Dateien werden &uuml;ber Wordpress API hochgeladen und im Produkt in den Metadaten als Array "openxe_product_attachments" hinterlegt. Diese k&ouml;nnen dann z.B. mit einem Snippet angezeigt werden. Felder: "typ", "wp_media_id", "name". Der URL kann mit wp_get_attachment_url($wp_media_id) ermittelt werden.'),
+        'dateienuebertragen' => array('typ' => 'info', 'bezeichnung' => '{|Datei&uuml;bertragung|}', 'info' => 'Dateien werden &uuml;ber Wordpress API hochgeladen und im Produkt in den Metadaten als Array "product_attachments" mit Präfix (s.o.) hinterlegt. Diese k&ouml;nnen dann z.B. mit einem Snippet angezeigt werden. Felder: "typ", "wp_media_id", "name". Der URL kann mit wp_get_attachment_url($wp_media_id) ermittelt werden.'),
         )
       );
   }
