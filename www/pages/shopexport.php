@@ -673,8 +673,8 @@ class Shopexport
     $id = (int)$this->app->Secure->GetGET('id');
     $alle = $this->app->Secure->GetPOST('alle');
     $allchanged = $this->app->Secure->GetPOST('allchanged');
-    $bestaetigen = $this->app->Secure->GetPOST('bestaetigen');
     $abbrechen = $this->app->Secure->GetPOST('abbrechen');
+    $deaktivieren = $this->app->Secure->GetPOST('deaktivieren');
     $artikelladen = $this->app->Secure->GetPOST('artikelladen');
     $artikel = $this->app->Secure->GetPOST('artikel');
     $kategorie = $this->app->Secure->GetPOST('kategorie');
@@ -726,16 +726,7 @@ class Shopexport
     }
 
     if(!empty($allchanged)) {
-      if(!empty($bestaetigen)) {
         if($id > 0){
-          /*$artikelarr = $this->app->DB->SelectArr("SELECT a.id FROM artikel a
-        LEFT JOIN (SELECT artikel FROM artikel_onlineshops WHERE shop = '$id' AND aktiv = 1 GROUP BY artikel) oa ON a.id = oa.artikel
-        WHERE (a.shop='$id' OR a.shop2='$id' OR a.shop3='$id' OR NOT ISNULL(oa.artikel)) AND a.geloescht!=1");
-          $cartikelarr = !empty($artikelarr) ? count($artikelarr) : 0;
-          for ($i = 0; $i < $cartikelarr; $i++) {
-            $this->app->DB->Insert("INSERT INTO shopexport_artikeluebertragen_check (id,shop,artikel) VALUES ('','$id','" . $artikelarr[$i]['id'] . "')");
-          }
-        }*/
           $this->resetChangedInfo($id);
           $this->app->DB->Delete(
             sprintf(
@@ -770,13 +761,10 @@ class Shopexport
         }
 
         $msg = $this->app->erp->base64_url_encode("<div class=\"success\">Alle Artikel die mit dem Shop verkn&uuml;pft sind werden &uuml;berpr&uuml;ft.</div>");
-        $this->app->Location->execute("index.php?module=shopexport&action=artikeluebertragung&id=$id&msg=$msg");
-      }
-      $this->app->Tpl->Add('MESSAGE','<div class="error">Bitte Best&auml;tigen Sie die &Uuml;bertragung!</div>');
+        $this->app->Location->execute("index.php?module=shopexport&action=artikeluebertragung&id=$id&msg=$msg");      
     }
 
     if(!empty($alle)) {
-      if(!empty($bestaetigen)) {
         if($id > 0){
           /*$artikelarr = $this->app->DB->SelectArr("SELECT a.id FROM artikel a
         LEFT JOIN (SELECT artikel FROM artikel_onlineshops WHERE shop = '$id' AND aktiv = 1 GROUP BY artikel) oa ON a.id = oa.artikel
@@ -805,8 +793,6 @@ class Shopexport
 
         $msg = $this->app->erp->base64_url_encode("<div class=\"success\">Alle Artikel die mit dem Shop verkn&uuml;pft sind werden &uuml;bertragen.</div>");
         $this->app->Location->execute("index.php?module=shopexport&action=artikeluebertragung&id=$id&msg=$msg");
-      }
-      $this->app->Tpl->Add('MESSAGE','<div class="error">Bitte Best&auml;tigen Sie die &Uuml;bertragung!</div>');
     }
 
     if(!empty($abbrechen)) {
@@ -818,8 +804,11 @@ class Shopexport
       $this->app->Location->execute('index.php?module=shopexport&action=artikeluebertragung&id='.$id.'&msg='.$msg);
     }
 
+    if(!empty($deaktivieren)) {
+        $this->app->erp->deactivateCronjob('artikeluebertragen');
+    }
+
     if($kategorieladen != '') {
-      if(!empty($bestaetigen)) {
         $typ = $this->app->DB->Select("SELECT id FROM artikelkategorien WHERE bezeichnung!='' AND bezeichnung='$kategorie' LIMIT 1");
         if($typ) {
           $typ .= '_kat';
@@ -842,12 +831,9 @@ class Shopexport
         }
         $msg = $this->app->erp->base64_url_encode("<div class=\"error\">Keine Artikelkategorie ausgew&auml;hlt</div>");
         $this->app->Location->execute("index.php?module=shopexport&action=artikeluebertragung&id=$id&msg=$msg");
-      }
-      $this->app->Tpl->Add('MESSAGE','<div class="error">Bitte Best&auml;tigen Sie die &Uuml;bertragung!</div>');
     }
     
     if($artikelladen!='') {
-      if(!empty($bestaetigen)) {
         $artikelid = $this->app->DB->Select("SELECT id FROM artikel WHERE nummer!='' AND nummer='$artikel' AND (geloescht = 0 OR isnull(geloescht))  AND nummer <> 'DEL' LIMIT 1");
 
         if($artikelid > 0 && $id > 0)
@@ -859,8 +845,6 @@ class Shopexport
         }
         $msg = $this->app->erp->base64_url_encode("<div class=\"error\">Kein Artikel ausgew&auml;hlt</div>");
         $this->app->Location->execute("index.php?module=shopexport&action=artikeluebertragung&id=$id&msg=$msg");
-      }
-      $this->app->Tpl->Add('MESSAGE','<div class="error">Bitte Best&auml;tigen Sie die &Uuml;bertragung!</div>');
     }
 
     $this->app->Tpl->Set('VORMATRIXPRODUKT','<!--');
@@ -923,9 +907,6 @@ class Shopexport
     }
     $this->app->erp->checkActiveCronjob('artikeluebertragen', 'IMPORTERINFO2');
 
-
-
-
     $this->app->erp->MenuEintrag('index.php?module=onlineshops&action=edit&id='.$id, 'Zur&uuml;ck zur &Uuml;bersicht');
     $this->app->YUI->AutoComplete('artikel','artikelnummer',1);
     $this->app->YUI->AutoComplete('kategorie','artikelkategorien');
@@ -942,8 +923,7 @@ class Shopexport
 
   public function ShopexportAdressuebertragung()
   {
-    $id = (int)$this->app->Secure->GetGET('id');
-    $bestaetigen = $this->app->Secure->GetPOST('bestaetigen');
+    $id = (int)$this->app->Secure->GetGET('id');    
     $alle = $this->app->Secure->GetPOST('alle');
     $abbrechen = $this->app->Secure->GetPOST('abbrechen');
     $adresseladen = $this->app->Secure->GetPOST('adresseladen');
@@ -952,15 +932,12 @@ class Shopexport
     $gruppe = $this->app->Secure->GetPOST('gruppe');
 
     if(!empty($alle)) {
-      if(!empty($bestaetigen)) {
         if($id > 0){
           $this->app->DB->Insert("INSERT INTO shopexport_adressenuebertragen (shop,adresse) SELECT $id, a.id FROM adresse a WHERE a.geloescht <> 1 AND a.kundennummer <> '' AND a.id NOT IN (SELECT adresse FROM shopexport_adressenuebertragen WHERE shop = $id)");
         }
 
         $msg = $this->app->erp->base64_url_encode("<div class=\"success\">Alle Adressen die mit dem Shop verkn&uuml;pft sind werden &uuml;bertragen.</div>");
         $this->app->Location->execute("index.php?module=shopexport&action=adressuebertragung&id=$id&msg=$msg");
-      }
-      $this->app->Tpl->Add('MESSAGE','<div class="error">Bitte Best&auml;tigen Sie die &Uuml;bertragung!</div>');
     }
 
     if(!empty($abbrechen)) {
@@ -970,7 +947,7 @@ class Shopexport
     }
 
     if($gruppeladen!='') {
-      if(!empty($bestaetigen) && $gruppe!='') {
+      if($gruppe!='') {
         $gruppetmp = explode(' ', $gruppe);
         $gruppenid = $this->app->DB->Select("SELECT id FROM gruppen WHERE kennziffer='".$gruppetmp[0]."' LIMIT 1");
         if($gruppenid > 0 && $id > 0)
@@ -982,12 +959,12 @@ class Shopexport
         $msg = $this->app->erp->base64_url_encode("<div class=\"error\">Keie Adresse ausgew&auml;hlt</div>");
         $this->app->Location->execute("index.php?module=shopexport&action=adressuebertragung&id=$id&msg=$msg");
       }
-      $this->app->Tpl->Add('MESSAGE','<div class="error">Bitte Best&auml;tigen Sie die &Uuml;bertragung!</div>');
+      $this->app->Tpl->Add('MESSAGE','<div class="error">Keine Gruppe angegeben</div>');
     }
     
     if($adresseladen!='')
     {
-      if(!empty($bestaetigen) && $adresse!=''){
+      if($adresse!=''){
         $adressetmp = explode(' ', $adresse);
         $adressid = $adressetmp[0];
         $adressid = $this->app->DB->Select("SELECT id FROM adresse WHERE name!='' AND kundennummer!='' AND geloescht<>1 AND id='$adressid' LIMIT 1");
@@ -1000,7 +977,7 @@ class Shopexport
         $msg = $this->app->erp->base64_url_encode("<div class=\"error\">Keie Adresse ausgew&auml;hlt</div>");
         $this->app->Location->execute("index.php?module=shopexport&action=adressuebertragung&id=$id&msg=$msg");
       }
-      $this->app->Tpl->Add('MESSAGE','<div class="error">Bitte Best&auml;tigen Sie die &Uuml;bertragung!</div>');
+      $this->app->Tpl->Add('MESSAGE','<div class="error">Keine Adresse angegeben</div>');
     }
 
     $this->ShopexportMenu();
