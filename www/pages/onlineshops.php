@@ -2844,6 +2844,7 @@ INNER JOIN shopexport s ON
     $id = (int)$this->app->Secure->GetGET('id');
     $delcache = $this->app->Secure->GetPOST('delcache');
     $delcacheselected = $this->app->Secure->GetPOST('delcacheselected');
+    $artikelsend = $this->app->Secure->GetPOST('artikelsend');
 
     // Process multi action
     $where = "1";
@@ -2866,10 +2867,20 @@ INNER JOIN shopexport s ON
         LEFT JOIN (SELECT artikel FROM artikel_onlineshops WHERE shop = '$id' AND aktiv = 1 GROUP BY artikel) oa ON a.id = oa.artikel
         SET a.cache_lagerplatzinhaltmenge = -999 WHERE (a.shop = '$id' OR a.shop2 = '$id' OR a.shop3 = '$id' OR NOT ISNULL(oa.artikel)) AND a.geloescht = 0 AND ($where)");
         $anz = $this->app->DB->affected_rows();
-//        $this->app->erp->LogFile("Lagerzahlencache zurückgesetzt für $anz Artikel, shopid: $id");
         $this->Log(Logger::INFO, "Lagerzahlencache zurückgesetzt für $anz Artikel, shopid: $id");
         $this->app->Tpl->Add('MESSAGE','<div class="info">Lagerzahlencache zurückgesetzt für '.$anz.' Artikel, shopid: '.$id.'</div>');
       }
+    }
+
+    if(!empty($artikelsend)) {
+        if (!empty($selectedIds)) {
+            foreach ($selectedIds as $artikelid) {
+              $this->app->DB->Insert("INSERT INTO shopexport_artikeluebertragen (id,shop,artikel) VALUES ('','$id','$artikelid')");
+            }
+            $this->app->Tpl->AddMessage('info',count($selectedIds).' Artikel der &Uuml;bertragung hinzugef&uuml;gt');
+        } else {
+            $this->app->Tpl->AddMessage('error','Keine Artikel ausgew&auml;hlat');
+        }
     }
 
     $this->ShopexportMenu();

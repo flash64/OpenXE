@@ -20,7 +20,7 @@
                             <table>
                                 <legend>Stapelverarbeitung</legend>
                                 <tr>
-                                    <td><input type="checkbox" value="1" id="autoalle" />&nbsp;alle markieren&nbsp;</td><td><input type="submit" class="btnBlue" name="delcacheselected" value="{|Lagerzahlencache zur&uuml;cksetzen|}" /></td>
+                                    <td><input type="checkbox" value="1" id="autoalle" />&nbsp;alle markieren&nbsp;</td><td></td>
                                 </tr>
                             </table>
                         </fieldset>
@@ -30,7 +30,9 @@
         			<div class="inside inside-full-height">
         				<fieldset>
         					<legend>{|Aktionen|}</legend>					
-        					<input type="submit" class="btnBlueNew" value="{|Lagerzahlencache gesamt zur&uuml;cksetzen|}" name="delcache"><br			
+        					<input type="submit" class="btnBlueNew" value="{|Lagerzahlencache zur&uuml;cksetzen|}" name="delcacheselected">
+        					<input type="submit" class="btnBlueNew" value="{|Lagerzahlencache gesamt zur&uuml;cksetzen|}" name="delcache">
+        					<input type="submit" class="btnBlueNew" value="{|Artikel &uuml;bertragen|}" name="artikelsend">
         				</fieldset>
         			</div>
 	    		</div>

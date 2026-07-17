@@ -132,6 +132,13 @@ class erpAPI
     }
   }
 
+  public function deactivateCronjob($parameter) {
+    $this->loadCronjobObj();
+    if(method_exists($this->cronjobObj,'deactivateCronjob')) {
+      $this->cronjobObj->deactivateCronjob($parameter);
+    }
+  }
+
   /**
    * @param array $output
    * @param array $task
