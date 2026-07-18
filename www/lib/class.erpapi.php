@@ -305,6 +305,14 @@ public function checkPDFClass($beleg)
     return false;
   }
 
+  public function ArtikelUebertragenResetChangedInfo($shopId) {
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_start_'.$shopId,'');
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_checked_'.$shopId,'');
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_changed_'.$shopId,'');
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_transfered_'.$shopId,'');
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_lastid_'.$shopId,'');
+  }
+
   /** @deprecated */
   function LagerzahlenCSV($datei, $artikel, $lager = 0, $lager_platz = 0, $append = false)
   {

@@ -593,17 +593,6 @@ class Shopexport
   }
 
   /**
-   * @param int $shopId
-   */
-  public function resetChangedInfo($shopId) {
-    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_start_'.$shopId,'');
-    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_checked_'.$shopId,'');
-    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_changed_'.$shopId,'');
-    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_transfered_'.$shopId,'');
-    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_lastid_'.$shopId,'');
-  }
-
-  /**
    * @param int $ids
    */
   public function addChangedArticles($minutes = 15)
@@ -671,8 +660,6 @@ class Shopexport
   public function ShopexportArtikeluebertragung()
   {
     $id = (int)$this->app->Secure->GetGET('id');
-    $alle = $this->app->Secure->GetPOST('alle');
-    $allchanged = $this->app->Secure->GetPOST('allchanged');
     $abbrechen = $this->app->Secure->GetPOST('abbrechen');
     $deaktivieren = $this->app->Secure->GetPOST('deaktivieren');
     $artikelladen = $this->app->Secure->GetPOST('artikelladen');
@@ -725,80 +712,10 @@ class Shopexport
       $this->app->Location->execute("index.php?module=shopexport&action=artikeluebertragung&id=$id&msg=$msg");
     }
 
-    if(!empty($allchanged)) {
-        if($id > 0){
-          $this->resetChangedInfo($id);
-          $this->app->DB->Delete(
-            sprintf(
-              'DELETE FROM shopexport_artikeluebertragen_check WHERE shop = %d',
-              $id
-            )
-          );
-          $this->app->DB->Insert(
-            sprintf(
-              "INSERT INTO shopexport_artikeluebertragen_check (shop, artikel) 
-                SELECT '%d' as shop, a.id FROM artikel a 
-                LEFT JOIN (
-                    SELECT artikel FROM artikel_onlineshops WHERE shop = %d AND aktiv = 1 GROUP BY artikel
-                    ) oa ON a.id = oa.artikel
-                LEFT JOIN shopexport_artikeluebertragen AS sa ON sa.shop = %d AND sa.artikel = a.id
-                WHERE (a.shop=%d OR a.shop2=%d OR a.shop3=%d OR NOT ISNULL(oa.artikel)) AND a.geloescht!=1 AND ISNULL(sa.id)
-                GROUP BY a.id",
-              $id, $id, $id, $id, $id, $id
-            )
-          );
-          echo $this->app->DB->error();
-          $changeStart = $this->app->DB->affected_rows();
-          $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_start_'.$id,
-            $changeStart
-          );
-          $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_checked_'.$id,0);
-          $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_changed_'.$id,0);
-          $this->app->erp->SetKonfigurationValue(
-            'shopexport_artikeluebertragen_check_lastid_'.$id,
-            mt_rand(1,2000000000)
-          );
-        }
-
-        $msg = $this->app->erp->base64_url_encode("<div class=\"success\">Alle Artikel die mit dem Shop verkn&uuml;pft sind werden &uuml;berpr&uuml;ft.</div>");
-        $this->app->Location->execute("index.php?module=shopexport&action=artikeluebertragung&id=$id&msg=$msg");      
-    }
-
-    if(!empty($alle)) {
-        if($id > 0){
-          /*$artikelarr = $this->app->DB->SelectArr("SELECT a.id FROM artikel a
-        LEFT JOIN (SELECT artikel FROM artikel_onlineshops WHERE shop = '$id' AND aktiv = 1 GROUP BY artikel) oa ON a.id = oa.artikel
-        WHERE (a.shop='$id' OR a.shop2='$id' OR a.shop3='$id' OR NOT ISNULL(oa.artikel)) AND a.geloescht!=1");
-          $cartikelarr = !empty($artikelarr) ? count($artikelarr) : 0;
-          for ($i = 0; $i < $cartikelarr; $i++) {
-            $this->app->DB->Insert("INSERT INTO shopexport_artikeluebertragen (id,shop,artikel) VALUES ('','$id','" . $artikelarr[$i]['id'] . "')");
-          }
-          */
-          $this->resetChangedInfo($id);
-          $this->app->DB->Insert(
-            sprintf(
-              "INSERT INTO shopexport_artikeluebertragen (shop, artikel)
-                SELECT '%d' AS shop, a.id FROM artikel a 
-                LEFT JOIN (
-                    SELECT artikel FROM artikel_onlineshops WHERE shop = %d AND aktiv = 1 GROUP BY artikel
-                ) AS oa ON a.id = oa.artikel
-                WHERE (a.shop=%d OR a.shop2=%d OR a.shop3=%d OR NOT ISNULL(oa.artikel)) AND a.geloescht!=1",
-              $id,$id, $id, $id, $id
-            )
-          );
-          $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_start_'.$id,
-            $this->app->DB->affected_rows()
-          );
-        }
-
-        $msg = $this->app->erp->base64_url_encode("<div class=\"success\">Alle Artikel die mit dem Shop verkn&uuml;pft sind werden &uuml;bertragen.</div>");
-        $this->app->Location->execute("index.php?module=shopexport&action=artikeluebertragung&id=$id&msg=$msg");
-    }
-
     if(!empty($abbrechen)) {
       $this->app->DB->Delete("DELETE FROM shopexport_artikeluebertragen WHERE shop='$id'");
       $this->app->DB->Delete("DELETE FROM shopexport_artikeluebertragen_check WHERE shop='$id'");
-      $this->resetChangedInfo($id);
+      $this->app->erp->ArtikelUebertragenResetChangedInfo($id);
       //$this->app->erp-> 'shopexport_artikeluebertragen_check_start_'.$id
       $msg = $this->app->erp->base64_url_encode('<div class="success">Alle aktuellen Artikel wurden aus der &Uuml;bertragung entfernt.</div>');
       $this->app->Location->execute('index.php?module=shopexport&action=artikeluebertragung&id='.$id.'&msg='.$msg);
