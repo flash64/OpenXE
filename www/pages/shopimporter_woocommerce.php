@@ -27,6 +27,8 @@ class Shopimporter_Woocommerce extends ShopimporterBase
   public $shopid;
   public $data;
 
+  const TIMEOUT = 30;
+
   /**
    * @var $client WCClient $client
    */
@@ -544,8 +546,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
       if (empty($remoteIdInformation['id'])) {
         // The online shop doesnt know this article, write to log and continue with next product
-
-        $this->logger->error("WooCommerce Artikel $nummer wurde im Online-Shop nicht gefunden! Falsche Artikelnummer im Shop hinterlegt?");
+        $this->logger->error("WooCommerce Lagerzahlen Artikel $nummer wurde im Online-Shop nicht gefunden");
         continue;
       }
 
@@ -737,6 +738,8 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
 //        echo("Dateien:<br>");
 
+        $this->logger->debug("WooCommerce ImportSendList ".count($tmp[$i]['Dateien'])." files");
+
         foreach ($tmp[$i]['Dateien'] as $key => $datei) {
             if (!empty($this->filenamesmarty)) {
                 $smarty = new Smarty;
@@ -802,6 +805,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
       if (!is_null($product_id)) {
         // Product exists - check if it's a variation or regular product
+        $this->logger->debug("WooCommerce ImportSendList update product");
         if ($isVariant && !empty($parent_id)) {
           // This is a VARIATION - use the variations endpoint
           // Variations don't support certain attributes (they inherit from parent)
@@ -834,6 +838,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         }
       } else {
         // create a new product
+        $this->logger->debug("WooCommerce ImportSendList create product");
         $product_id = $this->client->post('products/', array_merge([
           'sku' => $nummer,
         ], $commonProductAtts))->id;
@@ -985,6 +990,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $this->statusPending = $felder['statusPending'] ?? 'pending';
     $this->statusProcessing = $felder['statusProcessing'] ?? 'processing';
     $this->statusCompleted = $felder['statusCompleted'] ?? 'completed';
+    $this->timeout = (int) $felder['timeout'] ?? SELF::TIMEOUT;
 
     $this->priceType = $felder['priceType'] ?? null;
 
@@ -996,7 +1002,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
       $ImportWooCommerceApiKey,
       //WooCommerce API Secret
       $ImportWooCommerceApiSecret,
-      ["query_string_auth" => true],
+      ["query_string_auth" => true, 'timeout' => $this->timeout],
       $this->logger,
       $this->ssl_ignore
     );
@@ -1156,6 +1162,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         'statusProcessing' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung in Bearbeitung|}:', 'size' => 10, 'default' => 'processing'),
         'statusCompleted' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung fertig|}:', 'size' => 10, 'default' => 'completed'),
         'priceType' => array('typ' => 'select', 'bezeichnung' => '{|Preisberechnungsgrundlage bei Auftragsimport|}', 'optionen' => array('netcalculated' => '{|Nettopreis zurückrechnen (Standard)|}', 'grosscalculated' => '{|Bruttopreis zurückrechnen|}')),
+        'timeout' => array('typ' => 'text', 'bezeichnung' => '{|Timeout in Sekunden|}:', 'size' => 40, 'default' => '30', 'info' => ''),
         'metadataprefix' => array('typ' => 'text', 'bezeichnung' => '{|Präfix für Metadaten|}:', 'size' => 40, 'default' => 'openxe_meta_', 'info' => ''),
         'productsmarty' => [
             'typ' => 'textarea',
@@ -1399,9 +1406,9 @@ class WCClient
    *
    * @throws WCHttpClientException
    */
-  public function __construct($url, $consumerKey, $consumerSecret, $options = [], $logger, $ssl_ignore)
+  public function __construct($url, $consumerKey, $consumerSecret, $options = [], $logger, $ssl_ignore, $timeout)
   {
-    $this->http = new WCHttpClient($url, $consumerKey, $consumerSecret, $options, $logger, $ssl_ignore);
+    $this->http = new WCHttpClient($url, $consumerKey, $consumerSecret, $options, $logger, $ssl_ignore, $timeout);
     $this->logger = $logger;
   }
 
@@ -2493,6 +2500,7 @@ class WCHttpClient
         $debug = ob_get_clean();
         $result['postdata'] = $postdata;
         $result['debug'] = $debug;
+        $curlinfo = curl_getinfo($this->ch);
         // Verbose debugging
 
         $this->logger->debug(
@@ -2500,6 +2508,7 @@ class WCHttpClient
         [
           'request' => $this->request,
           'response' => $this->response,
+          'curlinfo' => $curlinfo,
           'result' => $result
         ]
       );
