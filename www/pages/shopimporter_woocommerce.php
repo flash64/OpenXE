@@ -511,7 +511,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $tmp = $this->CatchRemoteCommand('data');
     $anzahl = 0;
     $ctmp = (!empty($tmp) ? count($tmp) : 0);
-
+    $this->logger->debug("WooCommerce ImportSendListLager ".$ctmp." entries");
     for ($i = 0; $i < $ctmp; $i++) {
       // Get important values from input data
       $artikel = $tmp[$i]['artikel'];
@@ -563,7 +563,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         $result = $this->client->put('products/' . $remoteIdInformation['id'], $updateProductParams);
       }
 
-      $this->logger->error(
+      $this->logger->info(
         "WooCommerce Lagerzahlenübertragung für Artikel: $nummer / $remoteIdInformation[id] - Anzahl: $lageranzahl",
         [
           'result' => $result
@@ -592,8 +592,9 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $tmp = $this->catchRemoteCommand('data');
     $anzahl = 0;
     $return = [];
-
-    for ($i = 0; $i < (!empty($tmp) ? count($tmp) : 0); $i++) {
+    $ctmp = (!empty($tmp) ? count($tmp) : 0);
+    $this->logger->debug("WooCommerce ImportSendList ".$ctmp." entries");
+    for ($i = 0; $i < $ctmp; $i++) {
       $return[$i] = new ArticleExportResult();
       $return[$i]->success = true;
       $artikel = $tmp[$i]['artikel'];
@@ -605,7 +606,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
             $smarty->assign('artikel', (object) $tmp[$i]);
             $smarty_array = json_decode($this->productsmarty, true);
             if (empty($smarty_array)) {
-                throw new Exception("Smarty template JSON decode error!");
+                throw new Exception("Smarty template JSON decode error! ".print_r(json_last_error_msg(),true));
             }
             $transformed = json_decode($smarty->fetch('string:'.$this->productsmarty),true);
             $tmp[$i] = array_merge((array) $tmp[$i], $transformed);
@@ -746,7 +747,6 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                 $directory = $this->app->erp->GetTMP().'/smarty/templates';
                 $smarty->setCompileDir($directory);
                 $dateidata = $datei;
-                unset($dateidata['datei']);
                 $dateidata['dateiname'] = pathinfo($dateidata['filename'] , PATHINFO_FILENAME);
                 $dateidata['endung'] = pathinfo($dateidata['filename'], PATHINFO_EXTENSION);
                 $dateidata['artikel'] = (object) $datei['artikeldata'];
@@ -827,14 +827,14 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
           $this->client->put('products/' . $parent_id . '/variations/' . $product_id, $variationAtts);
 
-          $this->logger->info("WooCommerce Variante geändert für Artikel: $nummer / Variation: $product_id (Parent: $parent_id)");
+          $this->logger->info("WooCommerce Variante geändert für Artikel: $nummer / Variation: $product_id (Parent: $parent_id), noch ".($ctmp - $i -1 )." Artikel");
         } else {
           // This is a regular product
           $this->client->put('products/' . $product_id, array_merge([
 
           ], $commonProductAtts));
 
-          $this->logger->info("WooCommerce Artikel geändert für Artikel: $nummer / $product_id");
+          $this->logger->info("WooCommerce Artikel geändert für Artikel: $nummer / $product_id, noch ".($ctmp - $i -1 )." Artikel");
         }
       } else {
         // create a new product
@@ -842,7 +842,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         $product_id = $this->client->post('products/', array_merge([
           'sku' => $nummer,
         ], $commonProductAtts))->id;
-        $this->logger->info("WooCommerce neuer Artikel angelegt: $nummer");
+        $this->logger->info("WooCommerce neuer Artikel angelegt: $nummer, noch ".($ctmp - $i - 1)." Artikel");
       }
 
       // TODO: Kategoriebaum wird noch nicht uebertragen
@@ -854,74 +854,76 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
       // Update the associated product categories
 
-      $chosenCats = array();
-      if (isset($tmp[$i]['kategorien']) || isset($tmp[$i]['kategoriename'])) {
-        $kategorien = $tmp[$i]['kategorien'];
-        if (!($kategorien) && !self::emptyString($tmp[$i]['kategoriename'])) {
-          $kategorien = array(
-            array(
-              'name' => $tmp[$i]['kategoriename'],
-            )
-          );
-        }
-        if ((!empty($kategorien) ? count($kategorien) : 0) > 0) {
-          // Retrive all WC categories via API
-          $allWooCommerceCategories = $this->client->get('products/categories', ['per_page' => '100']);
-
-          $searchWpCategories = [];
-          foreach ($allWooCommerceCategories as $a) {
-            $searchWpCategories[$a->id] = $a->name;
-          }
-          // searchWPCategories is an assoc array of type WCCatId(Int) -> WCCatName(string)
-
-          // Iterate over the categories that are choosen in xentral
-          foreach ($kategorien as $k => $v) {
-            $wawi_cat_name = $v['name'];
-
-            $wcCatId = null;
-
-            // If WC has a matching category. We match based on name!
-            if (array_search($wawi_cat_name, array_values($searchWpCategories)) !== false) {
-              // get  id of that WC Category
-              $wcCatId = array_search($wawi_cat_name, $searchWpCategories);
-
-            } else {
-              // No matching category exists
-              $wcCatId = $this->client->post('products/categories', [
-                'name' => $wawi_cat_name,
-              ])->id;
-
+      if ($this->kategorienuebertragen) {
+          $chosenCats = array();
+          if (isset($tmp[$i]['kategorien']) || isset($tmp[$i]['kategoriename'])) {
+            $kategorien = $tmp[$i]['kategorien'];
+            if (!($kategorien) && !self::emptyString($tmp[$i]['kategoriename'])) {
+              $kategorien = array(
+                array(
+                  'name' => $tmp[$i]['kategoriename'],
+                )
+              );
             }
+            if ((!empty($kategorien) ? count($kategorien) : 0) > 0) {
+              // Retrive all WC categories via API
+              $allWooCommerceCategories = $this->client->get('products/categories', ['per_page' => '100']);
 
-            if ($wcCatId) {
-              // update category. We first retrieve the product and append the new product category, not replace the entire category array.
-              $alreadyAssignedWCCats = $this->client->get('products/' . $product_id, [
-                'per_page' => 1,
-              ])->categories;
-
-              // Get ids of existing categories
-              $existingCategoryIds = [];
-              foreach ($alreadyAssignedWCCats as $cat) {
-                $existingCategoryIds[] = $cat->id;
+              $searchWpCategories = [];
+              foreach ($allWooCommerceCategories as $a) {
+                $searchWpCategories[$a->id] = $a->name;
               }
+              // searchWPCategories is an assoc array of type WCCatId(Int) -> WCCatName(string)
 
-              $allCatIds = array_merge($existingCategoryIds, array($wcCatId));
+              // Iterate over the categories that are choosen in xentral
+              foreach ($kategorien as $k => $v) {
+                $wawi_cat_name = $v['name'];
 
-              // prepare data to be in correct format for WC api. should be individual items with key 'id' and id as value
-              $allCatIdsWCAPIRep = array();
-              foreach ($allCatIds as $id) {
-                $allCatIdsWCAPIRep[] = ['id' => $id];
+                $wcCatId = null;
+
+                // If WC has a matching category. We match based on name!
+                if (array_search($wawi_cat_name, array_values($searchWpCategories)) !== false) {
+                  // get  id of that WC Category
+                  $wcCatId = array_search($wawi_cat_name, $searchWpCategories);
+
+                } else {
+                  // No matching category exists
+                  $wcCatId = $this->client->post('products/categories', [
+                    'name' => $wawi_cat_name,
+                  ])->id;
+
+                }
+
+                if ($wcCatId) {
+                  // update category. We first retrieve the product and append the new product category, not replace the entire category array.
+                  $alreadyAssignedWCCats = $this->client->get('products/' . $product_id, [
+                    'per_page' => 1,
+                  ])->categories;
+
+                  // Get ids of existing categories
+                  $existingCategoryIds = [];
+                  foreach ($alreadyAssignedWCCats as $cat) {
+                    $existingCategoryIds[] = $cat->id;
+                  }
+
+                  $allCatIds = array_merge($existingCategoryIds, array($wcCatId));
+
+                  // prepare data to be in correct format for WC api. should be individual items with key 'id' and id as value
+                  $allCatIdsWCAPIRep = array();
+                  foreach ($allCatIds as $id) {
+                    $allCatIdsWCAPIRep[] = ['id' => $id];
+                  }
+
+                  // Update category assignment
+                  $this->client->put('products/' . $product_id, [
+                    'categories' => $allCatIdsWCAPIRep,
+                  ]);
+
+                  $chosenCats[] = $wcCatId;
+                }
               }
-
-              // Update category assignment
-              $this->client->put('products/' . $product_id, [
-                'categories' => $allCatIdsWCAPIRep,
-              ]);
-
-              $chosenCats[] = $wcCatId;
             }
-          }
-        }
+        } // kategorienuebertragen
       }
     }
     return $return;
@@ -984,7 +986,11 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $this->fileunique = $felder['fileunique'];
     $this->metadataprefix = $felder['metadataprefix'];
 
-    $dateienuebertragen =  $this->app->DB->Select("SELECT dateienuebertragen FROM shopexport WHERE id = '$this->shopid' LIMIT 1");
+    $shopexportArr =  $this->app->DB->SelectRow("SELECT dateienuebertragen FROM shopexport WHERE id = '$this->shopid' LIMIT 1");
+
+    $dateienuebertragen = $shopexportArr['dateienuebertragen'];
+    $this->kategorienuebertragen = $shopexportArr['kategorienuebertragen'];
+
     $this->dateienuebertragen = explode(',',str_replace(' ','',strtolower($dateienuebertragen)));
 
     $this->statusPending = $felder['statusPending'] ?? 'pending';
@@ -1278,7 +1284,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
     if ($debug) {
         $result['curl_getinfo'] = $information;
-        $result['curl_postdata'] = $postdata;
+        $result['curl_postdata_500_bytes'] = mb_substr($postdata,0,500);
         $this->logger->debug(
                 'Woocommerce Wordpress debug',
                 $result
@@ -1305,7 +1311,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                             'type' => strtolower($datei['stichwort'])
                         ];
 
-            $postdata = base64_decode($datei['datei']);
+            $postdata = file_get_contents($datei['dateipfad']);
 
             $result = $this->wordpress_request(
                     endpoint: 'media',
@@ -1406,9 +1412,9 @@ class WCClient
    *
    * @throws WCHttpClientException
    */
-  public function __construct($url, $consumerKey, $consumerSecret, $options = [], $logger, $ssl_ignore, $timeout)
+  public function __construct($url, $consumerKey, $consumerSecret, $options = [], $logger, $ssl_ignore)
   {
-    $this->http = new WCHttpClient($url, $consumerKey, $consumerSecret, $options, $logger, $ssl_ignore, $timeout);
+    $this->http = new WCHttpClient($url, $consumerKey, $consumerSecret, $options, $logger, $ssl_ignore);
     $this->logger = $logger;
   }
 
@@ -2498,7 +2504,7 @@ class WCHttpClient
         // Verbose debugging
         fclose($out);
         $debug = ob_get_clean();
-        $result['postdata'] = $postdata;
+        $result['postdata_500_bytes'] = mb_substr($postdata,0,500);
         $result['debug'] = $debug;
         $curlinfo = curl_getinfo($this->ch);
         // Verbose debugging
