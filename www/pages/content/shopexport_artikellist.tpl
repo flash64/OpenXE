@@ -32,6 +32,7 @@
         					<legend>{|Aktionen|}</legend>
         					<input type="submit" class="btnBlueNew" value="{|Lagerzahlencache zur&uuml;cksetzen|}" name="delcacheselected">
         					<input type="submit" class="btnBlueNew" value="{|Lagerzahlencache gesamt zur&uuml;cksetzen|}" name="delcache">
+        					<legend>{|Artikel&uuml;bertragung|}</legend>
         					<input type="submit" class="btnBlueNew" value="{|Gew&auml;hlte Artikel hinzuf&uuml;gen|}" name="artikelsend">
 				            <input type="submit" class="btnBlueNew" value="{|Alle Artikel hinzuf&uuml;gen|}" name="alle"><br>
          					<input type="submit" class="btnBlueNew" value="{|Alle ge&auml;nderten Artikel hinzuf&uuml;gen|}" name="allchanged"><br>
