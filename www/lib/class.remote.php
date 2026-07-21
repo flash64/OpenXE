@@ -1457,7 +1457,8 @@ class Remote
                         $filename = $this->app->erp->GetDateiName($datei['id']);
                         $path_info = pathinfo($filename);
                         $data[$i]['Dateien'][] = array(
-                            'datei' => base64_encode($this->app->erp->GetDatei($datei['id'])),
+//                            'datei' => base64_encode($this->app->erp->GetDatei($datei['id'])), // Changed to path because of out-of-memory problems with big files
+                            'dateipfad' => $this->app->erp->GetDateiPfad($datei['id']),
                             'filename' => $filename,
                             'extension' => $path_info['extension'],
                             'mimetype' => $this->app->erp->GetDateiMimeType($datei['id']),
