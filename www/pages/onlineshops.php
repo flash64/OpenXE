@@ -154,9 +154,9 @@ class Onlineshops extends GenShopexport {
 
             $id = $app->Secure->GetGET('id');
             $allowed['onlineshops'] = array('artikellist');
-            $heading = array('',  '',   'Artikel-Nr.','Artikel','Hersteller','Herstellernummer','Kategorie','Aktiv','Lagersync','Einstellungen aus Artikel','Letzte Artikel&uuml;bertragung','Letzter Lagersync','Lagercache','Men&uuml;');
-            $width = array(  '1%','1%', '5%',         '40%',    '1%',   '1%',       '1%',                       '7%',                            '7%',               '1%',        '1%');
-            $findcols = array('a.id','a.id','a.nummer','a.name_de','a.hersteller','a.herstellernummer','ak.bezeichnung','aos.aktiv','a.autolagerlampe','aos.ausartikel','last_article_transfer','aos.last_storage_transfer','a.cache_lagerplatzinhaltmenge');
+            $heading = array('',  '',   'Artikel-Nr.','Artikel','Variante','Hersteller','Herstellernummer','Kategorie','Aktiv','Lagersync','Einstellungen aus Artikel','Letzte Artikel&uuml;bertragung','Letzter Lagersync','Lagercache','Men&uuml;');
+            $width = array(  '1%','1%', '5%',         '40%',    '1%',       '1%',       '1%',              '1%',      '7%',   '7%',        '1%',                       '1%');
+            $findcols = array('a.id','a.id','a.nummer','a.name_de','if (a.variante_von,\'Ja\',\'Nein\')','a.hersteller','a.herstellernummer','ak.bezeichnung','aos.aktiv','a.autolagerlampe','aos.ausartikel','last_article_transfer','aos.last_storage_transfer','a.cache_lagerplatzinhaltmenge');
             $searchsql = array('a.nummer','a.name_de','a.herstellernummer');
 
             $defaultorder = 1; //Optional wenn andere Reihenfolge gewuenscht
@@ -170,6 +170,7 @@ SELECT SQL_CALC_FOUND_ROWS
     $dropnbox.",
     a.nummer,
     a.name_de,
+    if (a.variante_von,'Ja','Nein'),
     a.hersteller,
     a.herstellernummer,
     ak.bezeichnung,
@@ -2849,6 +2850,7 @@ INNER JOIN shopexport s ON
     $delcache = $this->app->Secure->GetPOST('delcache');
     $delcacheselected = $this->app->Secure->GetPOST('delcacheselected');
     $artikelsend = $this->app->Secure->GetPOST('artikelsend');
+    $artikelremove = $this->app->Secure->GetPOST('artikelremove');
     $alle = $this->app->Secure->GetPOST('alle');
     $allchanged = $this->app->Secure->GetPOST('allchanged');
 
@@ -2944,6 +2946,17 @@ INNER JOIN shopexport s ON
           );
         }
         $this->app->Tpl->AddMessage('info','Alle Artikel die mit dem Shop verkn&uuml;pft sind werden &uuml;berpr&uuml;ft.');
+    }
+
+    if(!empty($artikelremove)) {
+        if (!empty($selectedIds)) {
+            foreach ($selectedIds as $artikelid) {
+              $this->app->DB->Insert("DELETE FROM shopexport_artikeluebertragen WHERE artikel ='$artikelid'");
+            }
+            $this->app->Tpl->AddMessage('info',count($selectedIds).' Artikel von der &Uuml;bertragung entfernt');
+        } else {
+            $this->app->Tpl->AddMessage('error','Keine Artikel ausgew&auml;hlat');
+        }
     }
 
     $this->ShopexportMenu();
