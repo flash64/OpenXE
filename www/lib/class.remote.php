@@ -1459,6 +1459,9 @@ class Remote
                     foreach ($dateien as $datei) {
                         $filename = $this->app->erp->GetDateiName($datei['id']);
                         $path_info = pathinfo($filename);
+
+                        $this->logger->debug('Remote prepare datei '.$filename);
+
                         $data[$i]['Dateien'][] = array(
 //                            'datei' => base64_encode($this->app->erp->GetDatei($datei['id'])), // Changed to path because of out-of-memory problems with big files
                             'dateipfad' => $this->app->erp->GetDateiPfad($datei['id']),
@@ -1473,7 +1476,7 @@ class Remote
                             'extid' => $this->GetShopexportMappingExt($id, 'datei', $datei['id'])
                         );
                     }
-                    $this->logger->debug('Remote prepared '.$count($data[$i]['Dateien']).' dateien');
+                    $this->logger->debug('Remote prepared '.count($data[$i]['Dateien']).' dateien');
                 }
 
                 $dateiengeloescht = $this->app->DB->SelectArr("SELECT s.extid FROM shopexport_mapping s LEFT JOIN datei d ON s.intid = d.id AND d.geloescht = 0 WHERE s.shop = '$id' AND s.tabelle = 'datei' AND s.intid2 = '$artikel' AND isnull(d.id)");
