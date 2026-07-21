@@ -154,10 +154,10 @@ class Onlineshops extends GenShopexport {
 
             $id = $app->Secure->GetGET('id');
             $allowed['onlineshops'] = array('artikellist');
-            $heading = array('',  '',   'Artikel-Nr.','Artikel','Aktiv','Lagersync','Einstellungen aus Artikel','Letzte Artikel&uuml;bertragung','Letzter Lagersync','Lagercache','Men&uuml;');
+            $heading = array('',  '',   'Artikel-Nr.','Artikel','Hersteller','Herstellernummer','Kategorie','Aktiv','Lagersync','Einstellungen aus Artikel','Letzte Artikel&uuml;bertragung','Letzter Lagersync','Lagercache','Men&uuml;');
             $width = array(  '1%','1%', '5%',         '40%',    '1%',   '1%',       '1%',                       '7%',                            '7%',               '1%',        '1%');
-            $findcols = array('a.id','a.id','a.nummer','a.name_de','aos.aktiv','a.autolagerlampe','aos.ausartikel','last_article_transfer','aos.last_storage_transfer','a.cache_lagerplatzinhaltmenge');
-            $searchsql = array('a.nummer','a.name_de');
+            $findcols = array('a.id','a.id','a.nummer','a.name_de','a.hersteller','a.herstellernummer','ak.bezeichnung','aos.aktiv','a.autolagerlampe','aos.ausartikel','last_article_transfer','aos.last_storage_transfer','a.cache_lagerplatzinhaltmenge');
+            $searchsql = array('a.nummer','a.name_de','a.herstellernummer');
 
             $defaultorder = 1; //Optional wenn andere Reihenfolge gewuenscht
             $defaultorderdesc = 0;
@@ -170,6 +170,9 @@ SELECT SQL_CALC_FOUND_ROWS
     $dropnbox.",
     a.nummer,
     a.name_de,
+    a.hersteller,
+    a.herstellernummer,
+    ak.bezeichnung,
     aos.aktiv,
     a.autolagerlampe,
     aos.ausartikel,".
@@ -183,6 +186,7 @@ INNER JOIN artikel_onlineshops aos ON
     a.id = aos.artikel
 INNER JOIN shopexport s ON
     s.id = aos.shop
+    LEFT JOIN artikelkategorien ak ON substring_index(a.typ,'_kat',1) = ak.id
             ";
             $where = " s.id = '$id'";
 
@@ -2845,6 +2849,8 @@ INNER JOIN shopexport s ON
     $delcache = $this->app->Secure->GetPOST('delcache');
     $delcacheselected = $this->app->Secure->GetPOST('delcacheselected');
     $artikelsend = $this->app->Secure->GetPOST('artikelsend');
+    $alle = $this->app->Secure->GetPOST('alle');
+    $allchanged = $this->app->Secure->GetPOST('allchanged');
 
     // Process multi action
     $where = "1";
@@ -2881,6 +2887,63 @@ INNER JOIN shopexport s ON
         } else {
             $this->app->Tpl->AddMessage('error','Keine Artikel ausgew&auml;hlat');
         }
+    }
+    if(!empty($alle)) {
+        if($id > 0){
+          $this->app->erp->ArtikelUebertragenResetChangedInfo($id);
+          $this->app->DB->Insert(
+            sprintf(
+              "INSERT INTO shopexport_artikeluebertragen (shop, artikel)
+                SELECT '%d' AS shop, a.id FROM artikel a
+                LEFT JOIN (
+                    SELECT artikel FROM artikel_onlineshops WHERE shop = %d AND aktiv = 1 GROUP BY artikel
+                ) AS oa ON a.id = oa.artikel
+                WHERE (a.shop=%d OR a.shop2=%d OR a.shop3=%d OR NOT ISNULL(oa.artikel)) AND a.geloescht!=1",
+              $id,$id, $id, $id, $id
+            )
+          );
+          $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_start_'.$id,
+            $this->app->DB->affected_rows()
+          );
+        }
+        $this->app->Tpl->AddMessage('info','Alle Artikel die mit dem Shop verkn&uuml;pft sind werden &uuml;bertragen');
+    }
+
+    if(!empty($allchanged)) {
+        if($id > 0){
+          $this->app->erp->ArtikelUebertragenResetChangedInfo($id);
+          $this->app->DB->Delete(
+            sprintf(
+              'DELETE FROM shopexport_artikeluebertragen_check WHERE shop = %d',
+              $id
+            )
+          );
+          $this->app->DB->Insert(
+            sprintf(
+              "INSERT INTO shopexport_artikeluebertragen_check (shop, artikel)
+                SELECT '%d' as shop, a.id FROM artikel a
+                LEFT JOIN (
+                    SELECT artikel FROM artikel_onlineshops WHERE shop = %d AND aktiv = 1 GROUP BY artikel
+                    ) oa ON a.id = oa.artikel
+                LEFT JOIN shopexport_artikeluebertragen AS sa ON sa.shop = %d AND sa.artikel = a.id
+                WHERE (a.shop=%d OR a.shop2=%d OR a.shop3=%d OR NOT ISNULL(oa.artikel)) AND a.geloescht!=1 AND ISNULL(sa.id)
+                GROUP BY a.id",
+              $id, $id, $id, $id, $id, $id
+            )
+          );
+          echo $this->app->DB->error();
+          $changeStart = $this->app->DB->affected_rows();
+          $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_start_'.$id,
+            $changeStart
+          );
+          $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_checked_'.$id,0);
+          $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_changed_'.$id,0);
+          $this->app->erp->SetKonfigurationValue(
+            'shopexport_artikeluebertragen_check_lastid_'.$id,
+            mt_rand(1,2000000000)
+          );
+        }
+        $this->app->Tpl->AddMessage('info','Alle Artikel die mit dem Shop verkn&uuml;pft sind werden &uuml;berpr&uuml;ft.');
     }
 
     $this->ShopexportMenu();

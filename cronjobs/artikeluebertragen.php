@@ -254,7 +254,7 @@ foreach ($shops_to_transmit as $shop_to_transmit) {
                     $shop_to_transmit['shop']
                 )
             );
-            $app->erp->LagerSync($article['artikel'], true); 
+            $app->erp->LagerSync($article['artikel'], true);
         }                       
     } else {
 

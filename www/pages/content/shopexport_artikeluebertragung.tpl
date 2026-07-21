@@ -28,8 +28,6 @@
 					            <input type="submit" class="btnBlueNew" value="{|Lagerzahlencache zur&uuml;cksetzen|}" name="delcache"><br>
 					            <input type="submit" class="btnBlueNew" value="{|Lagerzahlencache für Shopartikel mit Menge 0 zur&uuml;cksetzen|}" name="delzerostockcache"><br>
 					            <input type="submit" class="btnBlueNew" value="{|Artikelcache zur&uuml;cksetzen|}" name="delarticlecache"><br>
-					            <input type="submit" class="btnBlueNew" value="{|Alle Artikel laden|}" name="alle"><br>
-             					<input type="submit" class="btnBlueNew" value="{|Alle ge&auml;nderten Artikel laden|}" name="allchanged"><br>
 					            <input type="submit" class="btnBlueNew" value="{|Alle Artikel entfernen|}" name="abbrechen"><br>
 					            <input type="submit" class="btnBlueNew" value="{|Prozesstarter deaktivieren|}" name="deaktivieren"><br>
             				</fieldset>

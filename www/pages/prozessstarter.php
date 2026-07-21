@@ -1674,7 +1674,7 @@ class Prozessstarter extends GenProzessstarter {
     if($hasPermission === true) {
       $this->app->DB->Update(
         sprintf(
-          "UPDATE prozessstarter SET aktiv = 0 WHERE parameter = '%s'",
+          "UPDATE prozessstarter SET aktiv = 0, mutex = 0, mutexcounter = 0 WHERE parameter = '%s'",
           $this->app->DB->real_escape_string($parameter)
         )
       );
