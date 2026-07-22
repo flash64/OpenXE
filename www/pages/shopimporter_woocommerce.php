@@ -986,7 +986,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $this->fileunique = $felder['fileunique'];
     $this->metadataprefix = $felder['metadataprefix'];
 
-    $shopexportArr =  $this->app->DB->SelectRow("SELECT dateienuebertragen FROM shopexport WHERE id = '$this->shopid' LIMIT 1");
+    $shopexportArr =  $this->app->DB->SelectRow("SELECT * FROM shopexport WHERE id = '$this->shopid' LIMIT 1");
 
     $dateienuebertragen = $shopexportArr['dateienuebertragen'];
     $this->kategorienuebertragen = $shopexportArr['kategorienuebertragen'];
