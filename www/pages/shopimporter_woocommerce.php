@@ -594,6 +594,64 @@ class Shopimporter_Woocommerce extends ShopimporterBase
     $return = [];
     $ctmp = (!empty($tmp) ? count($tmp) : 0);
     $this->logger->debug("WooCommerce ImportSendList ".$ctmp." entries");
+
+    // Prepare files
+    $alle_dateien = array(); // pfad, dateiname
+    if ($this->dateienuebertragen) {
+        for ($i = 0; $i < $ctmp; $i++) {
+            $dateien_artikel = array();
+            if (isset($tmp[$i]['Dateien'])) {
+                // apply naming
+                foreach ($tmp[$i]['Dateien'] as $key => $datei) {
+                    if (!empty($this->filenamesmarty)) {
+                        $smarty = new Smarty;
+                        $directory = $this->app->erp->GetTMP().'/smarty/templates';
+                        $smarty->setCompileDir($directory);
+                        $dateidata = $datei;
+                        $dateidata['dateiname'] = pathinfo($dateidata['filename'] , PATHINFO_FILENAME);
+                        $dateidata['endung'] = pathinfo($dateidata['filename'], PATHINFO_EXTENSION);
+                        $dateidata['artikel'] = (object) $datei['artikeldata'];
+                        $smarty->assign('artikel', (object) $tmp[$i]);
+                        $smarty->assign('datei', (object) $dateidata);
+                        $transformed = $smarty->fetch('string:'.$this->filenamesmarty);
+                        if (!empty($transformed)) {
+                            $basename = pathinfo($transformed, PATHINFO_FILENAME);
+                            $ext = pathinfo($transformed, PATHINFO_EXTENSION);
+                            if (empty($ext)) {
+                                $ext = $datei['dateiendung'];
+                            }
+                            $datei['filename'] = $basename.".".$ext;
+                        }
+                    }
+                    // Ensure unique names
+                    if (in_array($datei['filename'],array_column($dateien_artikel,'filename'))) {
+                        $filecount = 0;
+                        $base = pathinfo($datei['filename'], PATHINFO_FILENAME);
+                        $extension = pathinfo($datei['filename'], PATHINFO_EXTENSION);
+                        do {
+                            $filecount++;
+                            $filename = $base.$this->fileunique.$filecount.'.'.$extension;
+                        } while (in_array($filename,array_column($dateien_artikel,'filename')));
+                        $datei['filename'] = $filename;
+                    }
+                    unset($datei['artikeldata']);
+                    $dateien_artikel[] = $datei;
+                }
+                $alle_dateien = array_merge($alle_dateien,$dateien_artikel);
+            }
+        } // Artikel loop files
+
+        // Each filename only once
+        $unique_filename = array_unique(array_column($alle_dateien, 'filename'));
+        $alle_dateien = array_intersect_key($alle_dateien, $unique_filename);
+        $this->logger->debug("WooCommerce ImportSendList ".count($alle_dateien)." files", $alle_dateien);
+
+        // Upload all the files and save wordpress id
+        $uploaded_files = $this->uploadFiles($alle_dateien);
+        $this->logger->debug("WooCommerce ImportSendList uploaded " .count($uploaded_files)." files", $uploaded_files);
+    }
+    // Files
+
     for ($i = 0; $i < $ctmp; $i++) {
       $return[$i] = new ArticleExportResult();
       $return[$i]->success = true;
@@ -733,70 +791,35 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         $commonProductAtts['stock_quantity'] = (int) $lageranzahl;
       }
 
-
       if (isset($tmp[$i]['Dateien'])) {
-        // apply naming
-
-//        echo("Dateien:<br>");
-
-        $this->logger->debug("WooCommerce ImportSendList ".count($tmp[$i]['Dateien'])." files");
-
-        foreach ($tmp[$i]['Dateien'] as $key => $datei) {
-            if (!empty($this->filenamesmarty)) {
-                $smarty = new Smarty;
-                $directory = $this->app->erp->GetTMP().'/smarty/templates';
-                $smarty->setCompileDir($directory);
-                $dateidata = $datei;
-                $dateidata['dateiname'] = pathinfo($dateidata['filename'] , PATHINFO_FILENAME);
-                $dateidata['endung'] = pathinfo($dateidata['filename'], PATHINFO_EXTENSION);
-                $dateidata['artikel'] = (object) $datei['artikeldata'];
-                $smarty->assign('artikel', (object) $tmp[$i]);
-                $smarty->assign('datei', (object) $dateidata);
-                $transformed = $smarty->fetch('string:'.$this->filenamesmarty);
-                if (!empty($transformed)) {
-                    $basename = pathinfo($transformed, PATHINFO_FILENAME);
-                    $ext = pathinfo($transformed, PATHINFO_EXTENSION);
-                    if (empty($ext)) {
-                        $ext = $datei['dateiendung'];
-                    }
-                    $datei['filename'] = $basename.".".$ext;
-                }
-            }
-            // Ensure unique names
-            if (in_array($datei['filename'],array_column($tmp[$i]['Dateien'],'filename'))) {
-                $filecount = 0;
-                $base = pathinfo($datei['filename'], PATHINFO_FILENAME);
-                $extension = pathinfo($datei['filename'], PATHINFO_EXTENSION);
-                do {
-                    $filecount++;
-                    $filename = $base.$this->fileunique.$filecount.'.'.$extension;
-                } while (in_array($filename,array_column($tmp[$i]['Dateien'],'filename')));
-                $datei['filename'] = $filename;
-            }
-            $tmp[$i]['Dateien'][$key]['filename'] = $datei['filename'];
-
-//            echo($tmp[$i]['Dateien'][$key]['filename']."<br>");
-        }
-
-//        exit();
-
-        $dateien = $this->uploadFiles($tmp[$i]['Dateien']);
-        if (!empty($dateien)) {
+        if (!empty($uploaded_files)) {
             $attachments = array();
-            foreach ($dateien as $datei) {
-                if ($datei['success']) {
-                    if ($datei['type'] == 'shopbild') {
+
+            foreach ($tmp[$i]['Dateien'] as $datei) {
+                // find file in uploaded_files
+                $key = array_search($datei['dateipfad'], array_column($uploaded_files, 'dateipfad'));
+                if ($key !== false) {
+                    $uploaded_file = $uploaded_files[$key];
+                    if ($uploaded_file['type'] == 'shopbild') {
                         $commonProductAtts['images'][] = [
-                            'src' => $datei['url']
+                            'src' => $uploaded_file['url']
                         ];
                     }
-                    else if (in_array(strtolower($datei['type']),$this->dateienuebertragen)) {
-                        $attachments[] = array('name' => $datei['name'], 'wp_media_id' => $datei['id'], 'typ' => $datei['type']);
+                    else if (in_array(strtolower($uploaded_file['type']),$this->dateienuebertragen)) {
+                        $attachments[] = array('name' => $uploaded_file['name'], 'wp_media_id' => $uploaded_file['wordpressid'], 'typ' => $uploaded_file['type']);
                     }
                 } else {
-                    $return[$i]->message .= "Datei wurde nicht exportiert: ".$datei['name']." (".$datei['status'].") ";
+                    $return[$i]->message .= "Datei wurde nicht exportiert: ".$datei['filename'];
                 }
             }
+
+            array_multisort(
+                array_column($attachments, 'name'),
+                SORT_ASC,
+                SORT_NATURAL,
+                $attachments
+            );
+
             if (!empty($attachments)) {
                 $commonProductAtts['meta_data'][] = array('key' => 'openxe_product_attachments', 'value' => $attachments);
             }
@@ -1345,7 +1368,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                         $fileResult['status'] = 'file update failed';
                     } else {
                         $fileResult['status'] = 'updated';
-                        $fileResult['id'] = $response['id'];
+                        $fileResult['wordpressid'] = $response['id'];
                         $fileResult['url'] = $response['guid']['rendered'];
                     }
                 } else { // New file
@@ -1360,17 +1383,18 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                     );
                     if ($result['http_code'] >= 200 && $result['http_code'] <= 299) {
                         $fileResult['status'] = 'created';
-                        $fileResult['id'] = $response['id'];
+                        $fileResult['wordpressid'] = $response['id'];
                         $fileResult['url'] = $response['guid']['rendered'];
                     } else {
                         $fileResult['success'] = false;
-                        $fileResult['status'] = 'file creation failed: '.$result['http_code'];
+                        $fileResult['status'] = 'file creation failed'.$result['http_code']?(" http code".$result['http_code']):'';
                     }
                 }
             } else {
                 $fileResult['success'] = false;
                 $fileResult['status'] = 'media search failed';
             }
+            $fileResult['dateipfad'] = $datei['dateipfad'];
             $uploadFilesResult[] = $fileResult;
         }
         $this->logger->debug(
