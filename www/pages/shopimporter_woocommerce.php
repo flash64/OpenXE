@@ -802,7 +802,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                     $uploaded_file = $uploaded_files[$key];
                     if ($uploaded_file['type'] == 'shopbild') {
                         $commonProductAtts['images'][] = [
-                            'src' => $uploaded_file['url']
+                            'id' => $uploaded_file['wordpressid']
                         ];
                     }
                     else if (in_array(strtolower($uploaded_file['type']),$this->dateienuebertragen)) {
