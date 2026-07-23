@@ -1457,6 +1457,13 @@ class Remote
                 if (!empty($dateien)) {
                     $data[$i]['Dateien'] = [];
                     foreach ($dateien as $datei) {
+
+                        if ($datei['vom_hauptartikel']) {
+                            $artikeldata = $this->app->DB->SelectRow("SELECT * FROM artikel WHERE id = ".$parentid." LIMIT 1");
+                        } else {
+                            $artikeldata = $this->app->DB->SelectRow("SELECT * FROM artikel WHERE id = ".$artikel." LIMIT 1");
+                        }
+
                         $filename = $this->app->erp->GetDateiName($datei['id']);
                         $path_info = pathinfo($filename);
 
@@ -1473,7 +1480,8 @@ class Remote
                             'id' => $datei['id'],
                             'version' => $datei['version'],
                             'stichwort' => $datei['subjekt'],
-                            'extid' => $this->GetShopexportMappingExt($id, 'datei', $datei['id'])
+                            'extid' => $this->GetShopexportMappingExt($id, 'datei', $datei['id']),
+                            'artikeldata' => $artikeldata
                         );
                     }
                     $this->logger->debug('Remote prepared '.count($data[$i]['Dateien']).' dateien');
