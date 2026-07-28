@@ -132,6 +132,13 @@ class erpAPI
     }
   }
 
+  public function deactivateCronjob($parameter) {
+    $this->loadCronjobObj();
+    if(method_exists($this->cronjobObj,'deactivateCronjob')) {
+      $this->cronjobObj->deactivateCronjob($parameter);
+    }
+  }
+
   /**
    * @param array $output
    * @param array $task
@@ -296,6 +303,14 @@ public function checkPDFClass($beleg)
       return $obj->ArtikelUebertragen($datei, $artikelarr, $uebertragung);
     }
     return false;
+  }
+
+  public function ArtikelUebertragenResetChangedInfo($shopId) {
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_start_'.$shopId,'');
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_checked_'.$shopId,'');
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_changed_'.$shopId,'');
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_transfered_'.$shopId,'');
+    $this->app->erp->SetKonfigurationValue('shopexport_artikeluebertragen_check_lastid_'.$shopId,'');
   }
 
   /** @deprecated */
@@ -37339,7 +37354,7 @@ function Firmendaten($field,$projekt="")
                         'auftrag',
                         'verbindlichkeit',
                         'lieferantengutschrift'
-                    ) AND t.id = '".$ticketid."'
+                    ) AND dst.objekt = 'Ticket' AND t.id = '".$ticketid."'
             ";
 
             return($this->app->DB->SelectArr($sql));
