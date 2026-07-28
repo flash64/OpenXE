@@ -37318,7 +37318,7 @@ function Firmendaten($field,$projekt="")
                 INNER JOIN `ticket` t ON
                     t.schluessel = tn.ticket
                 WHERE
-                    dst.objekt = 'Ticket' AND dsb.objekt = '".$doctype."' AND dsb.parameter = '".$doctypeid."'
+                    dst.objekt like 'ticket%' AND dsb.objekt = '".$doctype."' AND dsb.parameter = '".$doctypeid."'
             ";
             return($this->app->DB->SelectArr($sql));
         }
@@ -37354,7 +37354,7 @@ function Firmendaten($field,$projekt="")
                         'auftrag',
                         'verbindlichkeit',
                         'lieferantengutschrift'
-                    ) AND t.id = '".$ticketid."'
+                    ) AND dst.objekt like 'ticket%' AND t.id = '".$ticketid."'
             ";
 
             return($this->app->DB->SelectArr($sql));
