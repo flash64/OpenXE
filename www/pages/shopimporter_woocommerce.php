@@ -792,6 +792,8 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         $commonProductAtts['manage_stock'] = true;
       }
 
+      $commonProductAtts['backorders'] = $this->backorders;
+
       if ($lageranzahl !== '') {
         $commonProductAtts['stock_quantity'] = (int) $lageranzahl;
       }
@@ -1028,6 +1030,8 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
     $this->priceType = $felder['priceType'] ?? null;
 
+    $this->backorders = $felder['backorders'];
+
     $this->url = $ImportWooCommerceApiUrl;
     $this->client = new WCClient(
       //URL des WooCommerce Rest Servers
@@ -1197,6 +1201,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         'statusCompleted' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung fertig|}:', 'size' => 10, 'default' => 'completed'),
         'priceType' => array('typ' => 'select', 'bezeichnung' => '{|Preisberechnungsgrundlage bei Auftragsimport|}', 'optionen' => array('netcalculated' => '{|Nettopreis zurückrechnen (Standard)|}', 'grosscalculated' => '{|Bruttopreis zurückrechnen|}')),
         'timeout' => array('typ' => 'text', 'bezeichnung' => '{|Timeout in Sekunden|}:', 'size' => 40, 'default' => '30', 'info' => ''),
+        'backorders' => array('typ' => 'select', 'bezeichnung' => '{|Einstellungen für Backorders|}:', 'optionen' => array("no","notify","yes"), 'info' => ''),
         'metadataprefix' => array('typ' => 'text', 'bezeichnung' => '{|Präfix für Metadaten|}:', 'size' => 40, 'default' => 'openxe_meta_', 'info' => ''),
         'productsmarty' => [
             'typ' => 'textarea',
