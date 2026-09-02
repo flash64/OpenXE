@@ -648,7 +648,12 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
         // Upload all the files and save wordpress id
         $uploaded_files = $this->uploadFiles($alle_dateien);
-        $this->logger->debug("WooCommerce ImportSendList uploaded " .count($uploaded_files)." files", $uploaded_files);
+        if ($uploaded_files['success']) {
+            $this->logger->debug("WooCommerce ImportSendList uploaded " .count($uploaded_files['files'])." files", $uploaded_files);
+        } else {
+            $this->logger->error("WooCommerce ImportSendList failed", $uploaded_files);
+            throw new Exception("WooCommerce ImportSendList upload failed"); // For now, better to fail only the affected articles
+        }
     }
     // Files
 
@@ -792,14 +797,14 @@ class Shopimporter_Woocommerce extends ShopimporterBase
       }
 
       if (isset($tmp[$i]['Dateien'])) {
-        if (!empty($uploaded_files)) {
+        if (!empty($uploaded_files['files'])) {
             $attachments = array();
 
             foreach ($tmp[$i]['Dateien'] as $datei) {
                 // find file in uploaded_files
-                $key = array_search($datei['dateipfad'], array_column($uploaded_files, 'dateipfad'));
+                $key = array_search($datei['dateipfad'], array_column($uploaded_files['files'], 'dateipfad'));
                 if ($key !== false) {
-                    $uploaded_file = $uploaded_files[$key];
+                    $uploaded_file = $uploaded_files['files'][$key];
                     if ($uploaded_file['type'] == 'shopbild') {
                         $commonProductAtts['images'][] = [
                             'id' => $uploaded_file['wordpressid']
@@ -1319,12 +1324,12 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 
       /*
      * Upload files to wordpress API
-     * Returns list of files with url
+     * Returns success, files (list of files with url)
      */
 
     function uploadFiles($dateien) {
 
-        $uploadFilesResult = array();
+        $uploadFilesResult = array('success' => true, 'files' => array());
 
         foreach ($dateien as $datei) {
 
@@ -1364,6 +1369,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                     $response = $result['response'];
 
                     if ($result['status'] != 1 || $response['id'] != $file_wordpress_id) {
+                        $uploadFilesResult['success'] = false;
                         $fileResult['success'] = false;
                         $fileResult['status'] = 'file update failed';
                     } else {
@@ -1386,16 +1392,18 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                         $fileResult['wordpressid'] = $response['id'];
                         $fileResult['url'] = $response['guid']['rendered'];
                     } else {
+                        $uploadFilesResult['success'] = false;
                         $fileResult['success'] = false;
                         $fileResult['status'] = 'file creation failed'.$result['http_code']?(" http code".$result['http_code']):'';
                     }
                 }
             } else {
+                $uploadFilesResult['success'] = false;
                 $fileResult['success'] = false;
                 $fileResult['status'] = 'media search failed';
             }
             $fileResult['dateipfad'] = $datei['dateipfad'];
-            $uploadFilesResult[] = $fileResult;
+            $uploadFilesResult['files'][] = $fileResult;
         }
         $this->logger->debug(
                 'WooCommerce upload files',
