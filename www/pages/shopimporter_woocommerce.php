@@ -1399,7 +1399,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                     } else {
                         $uploadFilesResult['success'] = false;
                         $fileResult['success'] = false;
-                        $fileResult['status'] = 'file creation failed'.$result['http_code']?(" http code".$result['http_code']):'';
+                        $fileResult['status'] = 'file creation failed'.($result['http_code']?(" http code".$result['http_code']):'');
                     }
                 }
             } else {
