@@ -2258,7 +2258,7 @@ class Remote
         // See description of return format in function RemoteSendArticleList()
         $result = $this->RemoteCommand($shop_id, 'sendlist', $data);
 
-        $this->logger->debug('Remote sendlist');
+        $this->logger->debug('Remote sendlist', $result);
 
         if (!empty($result) && is_array($result)) {
             /** @var ArticleExportResult $articleResult */

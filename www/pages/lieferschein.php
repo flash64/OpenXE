@@ -639,9 +639,12 @@ class Lieferschein extends GenLieferschein
 
   function LieferscheinIconMenu($id,$prefix="")
   {
-    $status = $this->app->DB->Select("SELECT status FROM lieferschein WHERE id='$id' LIMIT 1");
-    $adresse = $this->app->DB->Select("SELECT adresse FROM lieferschein WHERE id='$id' LIMIT 1");
-    $lieferantenretoure = $this->app->DB->Select("SELECT lieferantenretoure FROM lieferschein WHERE id='$id' LIMIT 1");
+    $lieferscheinarr = $this->app->DB->SelectRow("SELECT * FROM lieferschein WHERE id='$id' LIMIT 1");
+    $adresse = $lieferscheinarr['adresse'];
+    $status = $lieferscheinarr['status'];
+    $lieferantenretoure = $lieferscheinarr['lieferantenretoure'];
+    $adressarr = $this->app->DB->SelectRow("SELECT * FROM adresse WHERE id =".$adresse." LIMIT 1");
+    $lieferantennummer = $adressarr['lieferantennummer'];
 
     if($adresse > 0 && ($status=="angelegt" || $status=="")) {
         $freigabe = "<option value=\"freigabe\">Lieferschein freigeben</option>";
@@ -709,6 +712,11 @@ class Lieferschein extends GenLieferschein
         }
     }
 
+    if (!empty($lieferantennummer)) {
+        $caselieferantengutschrift = "case 'lieferantengutschrift':  window.location.href='index.php?module=lieferantengutschrift&action=auslieferschein&lieferschein=%value%'; break;";
+        $optionlieferantengutschrift = "<option value=\"lieferantengutschrift\">als Lieferantengutschrift weiterf&uuml;hren</option>";
+    }
+
     if($this->app->erp->RechteVorhanden('belegeimport', 'belegcsvexport'))
     { 
       $casebelegeimport = "case 'belegeimport':  window.location.href='index.php?module=belegeimport&action=belegcsvexport&cmd=lieferschein&id=%value%'; break;";
@@ -741,6 +749,7 @@ class Lieferschein extends GenLieferschein
           case 'abschliessen': if(!confirm('Wirklich abschliessen?')) return document.getElementById('aktion$prefix').selectedIndex = 0; else window.location.href='index.php?module=lieferschein&action=abschliessen&id=%value%'; break;
           case 'auslagern': if(!confirm('Wirklich$erneut auslagern?')) return document.getElementById('aktion$prefix').selectedIndex = 0; else window.location.href='index.php?module=lieferschein&action=auslagern&id=%value%'; break;
           case 'rechnung': if(!confirm('".$extendtext."Wirklich als Rechnung weiterführen?')) return document.getElementById('aktion$prefix').selectedIndex = 0; else window.location.href='index.php?module=lieferschein&action=rechnung&id=%value%'; break;
+          $caselieferantengutschrift
           case 'proformarechnung': if(!confirm('".$extendtext."Wirklich als Proformarechnung weiterführen?')) return document.getElementById('aktion$prefix').selectedIndex = 0; else window.location.href='index.php?module=lieferschein&action=proformarechnung&id=%value%'; break;
           $casecustom
           $casehook
@@ -762,6 +771,7 @@ class Lieferschein extends GenLieferschein
       $auslagern
       $optionumlagern
       $alsrechnung
+      $optionlieferantengutschrift
       $optionbelegeimport
       <option value=\"pdf\">PDF &ouml;ffnen</option>
       $etiketten

@@ -111678,7 +111678,7 @@
                     "Extra": "",
                     "Privileges": "select,insert,update,references",
                     "Comment": ""
-                },                        
+                },
                 {
                     "Field": "skonto",
                     "Type": "decimal(10,2)",
@@ -111898,14 +111898,58 @@
                     "Extra": "",
                     "Privileges": "select,insert,update,references",
                     "Comment": ""
-                },                
-		{
+                },
+        		{
                     "Field": "ustid",
                     "Type": "varchar(64)",
                     "Collation": "utf8mb3_general_ci",
                     "Null": "YES",
                     "Key": "",
                     "Default": null,
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
+                },
+        		{
+                    "Field": "sprache",
+                    "Type": "varchar(32)",
+                    "Collation": "utf8mb3_general_ci",
+                    "Null": "YES",
+                    "Key": "",
+                    "Default": null,
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
+                },
+                {
+                    "Field": "belastungsanzeige",
+                    "Type": "int(1)",
+                    "Collation": null,
+                    "Null": "NO",
+                    "Key": "",
+                    "Default": "0",
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
+                },
+                {
+                    "Field": "steuersatz_normal",
+                    "Type": "decimal(10,2)",
+                    "Collation": null,
+                    "Null": "NO",
+                    "Key": "",
+                    "Default": "19.00",
+                    "Extra": "",
+                    "Privileges": "select,insert,update,references",
+                    "Comment": ""
+                },
+                {
+                    "Field": "steuersatz_ermaessigt",
+                    "Type": "decimal(10,2)",
+                    "Collation": null,
+                    "Null": "NO",
+                    "Key": "",
+                    "Default": "7.00",
                     "Extra": "",
                     "Privileges": "select,insert,update,references",
                     "Comment": ""
