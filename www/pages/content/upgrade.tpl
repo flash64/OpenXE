@@ -20,6 +20,13 @@ Das Upgrade funktioniert in 2 Schritten: Dateien aktualisieren, Datenbank auffri
 Falls nach einem Abbruch oder schwerwiegenden Fehler kein Upgrade möglich ist, im Hauptordner den Ordner ".git" l&ouml;schen und das Upgrade in der Konsole erneut durchf&uuml;hren.
 Dazu im Unterordner "upgrade" diesen Befehl starten: <pre>./upgrade.sh -do</pre>
                         </fieldset>
+        				<fieldset>
+                            <legend>{|Zweigauswahl|}</legend>
+Ab der Version 1.13 werden mehrere Zweige unterstützt. Beim Wechsel des Zweigs, i.d.R. auf eine höhere Version, wird eine Kompatibilitätsprüfung durchgeführt, bei Erfolg eine Migration, dann das eigentlich Upgrade. Zweige sind untereinander nicht kompatibel, ein Wechsel auf einen alten Zweig ist in der Regel nicht möglich.<br><br>
+Über die Konsole kann alternativ der Zweigwechsel im Unterordner "upgrade" mit diesen Befehl gestartet werde: <pre>./upgrade.sh -do -m BRANCHNAME</pre>
+<br>
+<font color="red">Vor dem Zweigwechsel IMMER ein Backup erstellen!</font>
+                        </fieldset>
                     </div>
            		</div>
        		</div>

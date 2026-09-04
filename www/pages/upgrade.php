@@ -79,7 +79,8 @@ class upgrade {
             case 'check_upgrade':
                 $this->app->Tpl->Set('UPGRADE_VISIBLE', "");
                 unlink($logfile);
-                upgrade_main(   directory: $directory,
+                $upgrade_result = upgrade_main(
+                                directory: $directory,
                                 verbose: $verbose,
                                 check_git: true,
                                 do_git: false,
@@ -103,7 +104,8 @@ class upgrade {
                 }
 
                 unlink($logfile);
-                upgrade_main(   directory: $directory,
+                $upgrade_result = upgrade_main(
+                                directory: $directory,
                                 verbose: $verbose,
                                 check_git: true,
                                 do_git: true,
@@ -122,7 +124,8 @@ class upgrade {
             case 'check_db':
                 $this->app->Tpl->Set('UPGRADE_DB_VISIBLE', "");
                 unlink($logfile);
-                upgrade_main(   directory: $directory,
+                $upgrade_result = upgrade_main(
+                                directory: $directory,
                                 verbose: $db_verbose,
                                 check_git: false,
                                 do_git: false,
@@ -140,7 +143,8 @@ class upgrade {
             case 'do_db_upgrade':
                 $this->app->Tpl->Set('UPGRADE_DB_VISIBLE', "");
                 unlink($logfile);
-                upgrade_main(   directory: $directory,
+                $upgrade_result = upgrade_main(
+                                directory: $directory,
                                 verbose: $db_verbose,
                                 check_git: false,
                                 do_git: false,
@@ -157,6 +161,12 @@ class upgrade {
             break;
             case 'refresh':
             break;
+        }
+
+        if ($upgrade_result < 0) {
+            $this->app->Tpl->AddMessage('error',"Upgrade fehlgeschlagen!");
+        } else {
+            $this->app->Tpl->AddMessage('success',"Upgrade erfolgreich!");
         }
 
         // Read results

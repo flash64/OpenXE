@@ -1,6 +1,6 @@
 [
     {
-        "name": "branchupgrade",
+        "name": "master",
         "enabled": true,
         "active": true,
         "description": {

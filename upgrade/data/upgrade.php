@@ -186,6 +186,7 @@ function upgrade_main(string $directory,bool $verbose, bool $check_git, bool $do
     $lockfile_name = $datafolder."/.in_progress.flag";
     $remote_file_name = $datafolder."/remote.json";
     $schema_file_name = "db_schema.json";
+    $upgrade_check_migrate_folder = "upgrades";
     $remotes = array();
     $enabled_remotes = array();
 
@@ -372,7 +373,7 @@ function upgrade_main(string $directory,bool $verbose, bool $check_git, bool $do
 
             if (!empty($remote_info['check'])) {
                 echo_out("Checking upgrade branch requirements...\n");
-                require_once($remote_info['check']);
+                require_once($upgrade_check_migrate_folder."/".$remote_info['check']);
                 $migration_check_result = upgrade_check();
                 if ($migration_check_result['result'] != 0) {
                     echo_out("\n--------------- Migration check failed ---------------\n");
@@ -385,7 +386,7 @@ function upgrade_main(string $directory,bool $verbose, bool $check_git, bool $do
             if (!empty($remote_info['migration'])) {
                 echo_out("Starting Migration THIS IS A POINT OF NO RETURN!\n");
                 echo_out("Migrating system...\n");
-                require_once($remote_info['migration']);
+                require_once($upgrade_check_migrate_folder."/".$remote_info['migration']);
                 $migration_result = upgrade_migrate();
                 if ($migration_result['result'] != 0) {
                     echo_out("--------------- Migration failed ---------------\n");
