@@ -70,6 +70,8 @@ class Shopimporter_Woocommerce extends ShopimporterBase
 /** @var Logger $logger */
   public $logger;
 
+  public $backorders_array = array("no","notify","yes");
+
   public function __construct($app, $intern = false)
   {
     $this->app = $app;
@@ -792,7 +794,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         $commonProductAtts['manage_stock'] = true;
       }
 
-      $commonProductAtts['backorders'] = $this->backorders;
+      $commonProductAtts['backorders'] = $this->backorders_array[$this->backorders];
 
       if ($lageranzahl !== '') {
         $commonProductAtts['stock_quantity'] = (int) $lageranzahl;
@@ -1201,7 +1203,7 @@ class Shopimporter_Woocommerce extends ShopimporterBase
         'statusCompleted' => array('typ' => 'text', 'bezeichnung' => '{|Statusname Bestellung fertig|}:', 'size' => 10, 'default' => 'completed'),
         'priceType' => array('typ' => 'select', 'bezeichnung' => '{|Preisberechnungsgrundlage bei Auftragsimport|}', 'optionen' => array('netcalculated' => '{|Nettopreis zurückrechnen (Standard)|}', 'grosscalculated' => '{|Bruttopreis zurückrechnen|}')),
         'timeout' => array('typ' => 'text', 'bezeichnung' => '{|Timeout in Sekunden|}:', 'size' => 40, 'default' => '30', 'info' => ''),
-        'backorders' => array('typ' => 'select', 'bezeichnung' => '{|Einstellungen für Backorders|}:', 'optionen' => array("no","notify","yes"), 'info' => ''),
+        'backorders' => array('typ' => 'select', 'bezeichnung' => '{|Einstellungen für Backorders|}:', 'optionen' => $this->backorders_array, 'info' => ''),
         'metadataprefix' => array('typ' => 'text', 'bezeichnung' => '{|Präfix für Metadaten|}:', 'size' => 40, 'default' => 'openxe_meta_', 'info' => ''),
         'productsmarty' => [
             'typ' => 'textarea',
