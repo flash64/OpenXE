@@ -1341,7 +1341,8 @@ class Shopimporter_Woocommerce extends ShopimporterBase
             $fileResult = [
                             'success' => true,
                             'name'=> $datei['filename'],
-                            'type' => strtolower($datei['stichwort'])
+                            'type' => strtolower($datei['stichwort']),
+                            'dateipfad' => $datei['dateipfad']
                         ];
 
             $postdata = file_get_contents($datei['dateipfad']);
@@ -1407,7 +1408,6 @@ class Shopimporter_Woocommerce extends ShopimporterBase
                 $fileResult['success'] = false;
                 $fileResult['status'] = 'media search failed';
             }
-            $fileResult['dateipfad'] = $datei['dateipfad'];
             $uploadFilesResult['files'][] = $fileResult;
         }
         $this->logger->debug(
