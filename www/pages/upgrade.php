@@ -165,7 +165,7 @@ class upgrade {
 
         if ($upgrade_result < 0) {
             $this->app->Tpl->AddMessage('error',"Upgrade fehlgeschlagen!");
-        } else {
+        } else if ($upgrade_result > 0) {
             $this->app->Tpl->AddMessage('success',"Upgrade erfolgreich!");
         }
 
