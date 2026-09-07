@@ -13,19 +13,6 @@
         "migration": ""
     },
     {
-        "name": "1.13.BETA",
-        "enabled": true,
-        "active": false,
-        "description": {
-            "en": "OpenXE Version 1.13 BETA, requires PHP 8.3 or higher",
-            "de": "OpenXE Version 1.13 BETA, benötigt mindestens PHP 8.3"
-        },
-        "host": "https://github.com/openxe-org/openxe.git",
-        "branch": "1.13.beta",
-        "check": "upgrade.1.13/check.php",
-        "migration": "upgrade.1.13/migrate.php"
-    },
-    {
         "name": "1.13",
         "enabled": false,
         "active": false,
@@ -34,8 +21,8 @@
             "de": "OpenXE Version 1.13, benötigt mindestens PHP 8.3"
         },
         "host": "https://github.com/openxe-org/openxe.git",
-        "branch": "1.13.release",
-        "check": "upgrade.1.13/check.php",
-        "migration": "upgrade.1.13/migrate.php"
+        "branch": "1.13",
+        "check": "1.13/check.php",
+        "migration": "1.13/migrate.php"
     }
 ]
